@@ -5,12 +5,12 @@ interface MatchStore {
   todayMatches: Match[]
   upcomingMatches: Match[]
   settings: Settings
-  activeTab: 'live' | 'schedule' | 'settings'
+  activeTab: 'live' | 'schedule' | 'standings' | 'bracket'
   prompts: string[]
   setTodayMatches: (matches: Match[]) => void
   setUpcomingMatches: (matches: Match[]) => void
   setSettings: (settings: Settings) => void
-  setActiveTab: (tab: 'live' | 'schedule' | 'settings') => void
+  setActiveTab: (tab: 'live' | 'schedule' | 'standings' | 'bracket') => void
   setPrompts: (prompts: string[]) => void
 }
 

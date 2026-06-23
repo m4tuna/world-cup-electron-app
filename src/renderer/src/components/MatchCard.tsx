@@ -39,6 +39,8 @@ function GoalList({ match, side }: { match: Match; side: 'home' | 'away' }) {
 export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResubscribe, onClick, dimmed }: Props) {
   const isLive = match.status === 'in'
   const isFinished = match.status === 'post'
+  const homeWins = isFinished && match.homeScore > match.awayScore
+  const awayWins = isFinished && match.awayScore > match.homeScore
   const homePhoto = match.homeTeam.starPlayerPhoto || match.homeTeam.teamLogo
   const awayPhoto = match.awayTeam.starPlayerPhoto || match.awayTeam.teamLogo
 
@@ -124,7 +126,7 @@ export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResu
         {/* Teams + score */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
           {/* Home */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px', opacity: awayWins ? 0.55 : 1, transition: 'opacity 0.15s' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '28px', lineHeight: 1 }}>{match.homeTeam.flagEmoji}</span>
               <div>
@@ -143,11 +145,17 @@ export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResu
           <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', paddingTop: '2px' }}>
             {isLive || isFinished ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span style={{ fontSize: '44px', fontWeight: 900, color: '#fff', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{
+                  fontSize: '44px', fontWeight: 900, lineHeight: 1, fontVariantNumeric: 'tabular-nums',
+                  color: homeWins ? 'rgba(74,222,128,0.95)' : awayWins ? 'rgba(255,255,255,0.35)' : '#fff',
+                }}>
                   {match.homeScore}
                 </span>
                 <span style={{ fontSize: '20px', color: 'rgba(255,255,255,0.4)', fontWeight: 300 }}>–</span>
-                <span style={{ fontSize: '44px', fontWeight: 900, color: '#fff', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{
+                  fontSize: '44px', fontWeight: 900, lineHeight: 1, fontVariantNumeric: 'tabular-nums',
+                  color: awayWins ? 'rgba(74,222,128,0.95)' : homeWins ? 'rgba(255,255,255,0.35)' : '#fff',
+                }}>
                   {match.awayScore}
                 </span>
               </div>
@@ -161,10 +169,15 @@ export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResu
                 {match.statusDetail}
               </span>
             )}
+            {isFinished && (homeWins || awayWins) && (
+              <span style={{ fontSize: '9px', color: 'rgba(74,222,128,0.6)', fontWeight: 600, letterSpacing: '0.04em' }}>
+                {homeWins ? match.homeTeam.abbreviation : match.awayTeam.abbreviation} WIN
+              </span>
+            )}
           </div>
 
           {/* Away */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', opacity: homeWins ? 0.55 : 1, transition: 'opacity 0.15s' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexDirection: 'row-reverse' }}>
               <span style={{ fontSize: '28px', lineHeight: 1 }}>{match.awayTeam.flagEmoji}</span>
               <div style={{ textAlign: 'right' }}>

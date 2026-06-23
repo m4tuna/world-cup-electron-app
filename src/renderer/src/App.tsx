@@ -5,6 +5,8 @@ import MatchCard from './components/MatchCard'
 import UpcomingMatch from './components/UpcomingMatch'
 import MatchDetail from './components/MatchDetail'
 import SettingsPanel from './components/SettingsPanel'
+import GroupStandings from './components/GroupStandings'
+import Bracket from './components/Bracket'
 import SpectrumQR from './components/SpectrumQR'
 import CastPanel from './components/CastPanel'
 import type { Match, CastDevice } from './types'
@@ -19,11 +21,12 @@ function groupByDay(matches: Match[]) {
   return groups
 }
 
-type Tab = 'live' | 'schedule' | 'settings'
+type Tab = 'live' | 'schedule' | 'standings' | 'bracket'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'live', label: 'Today' },
   { id: 'schedule', label: 'Schedule' },
-  { id: 'settings', label: 'Settings' },
+  { id: 'standings', label: 'Standings' },
+  { id: 'bracket', label: 'Bracket' },
 ]
 
 const CARET_H = 10   // px above the card
@@ -35,6 +38,7 @@ export default function App() {
   const [castDevices, setCastDevices] = useState<CastDevice[]>([])
   const [matchesLoading, setMatchesLoading] = useState(true)
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
   const fixedRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -109,7 +113,7 @@ export default function App() {
       const contentH = scrollRef.current?.scrollHeight ?? 0
       window.api.resizePanel?.(CARET_H + fixedH + contentH + 6)
     }
-  }, [activeTab, todayMatches.length, upcomingMatches.length, castDevices.length, selectedMatchId])
+  }, [activeTab, todayMatches.length, upcomingMatches.length, castDevices.length, selectedMatchId, showSettings])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', background: 'transparent' }}>
@@ -197,11 +201,32 @@ export default function App() {
                 </span>
               )}
             </button>
+
+            {/* Settings gear */}
+            <button
+              onClick={() => { setShowSettings((s) => !s); setSelectedMatchId(null) }}
+              title="Settings"
+              style={{
+                background: showSettings ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.06)',
+                border: showSettings ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '8px',
+                height: '30px',
+                width: '30px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={showSettings ? '#fff' : 'rgba(255,255,255,0.55)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </button>
           </div>
         </div>
 
-        {/* ── Tabs (hidden in match detail) ── */}
-        {!selectedMatch && (
+        {/* ── Tabs (hidden in match detail and settings) ── */}
+        {!selectedMatch && !showSettings && (
           <>
             <div style={{ display: 'flex', gap: '3px', padding: `0 ${PAD}px 10px` }}>
               {TABS.map((tab) => (
@@ -230,6 +255,12 @@ export default function App() {
 
           {selectedMatch ? (
             <MatchDetail match={selectedMatch} onBack={() => setSelectedMatchId(null)} />
+          ) : showSettings ? (
+            <>
+              <SettingsPanel settings={settings} onSetMinutes={handleSetMinutes} onSetSound={handleSetSound} onResetSubscriptions={handleResetSubs} />
+              <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', margin: '0 20px' }} />
+              <CastPanel />
+            </>
           ) : (<>
 
           {/* TODAY */}
@@ -290,13 +321,18 @@ export default function App() {
             </div>
           )}
 
-          {/* SETTINGS */}
-          {activeTab === 'settings' && (
-            <>
-              <SettingsPanel settings={settings} onSetMinutes={handleSetMinutes} onSetSound={handleSetSound} onResetSubscriptions={handleResetSubs} />
-              <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', margin: '0 20px' }} />
-              <CastPanel />
-            </>
+          {/* STANDINGS */}
+          {activeTab === 'standings' && (
+            <div style={{ padding: `14px ${PAD}px 16px` }}>
+              <GroupStandings />
+            </div>
+          )}
+
+          {/* BRACKET */}
+          {activeTab === 'bracket' && (
+            <div style={{ padding: `14px ${PAD}px 16px` }}>
+              <Bracket />
+            </div>
           )}
 
           </>)}

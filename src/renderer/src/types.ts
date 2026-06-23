@@ -50,6 +50,48 @@ export interface CastDevice {
   lastSeen: number
 }
 
+export interface StandingsEntry {
+  teamId: string
+  name: string
+  abbreviation: string
+  flagEmoji: string
+  played: number
+  w: number
+  d: number
+  l: number
+  gf: number
+  ga: number
+  gd: number
+  pts: number
+}
+
+export interface StandingsGroup {
+  name: string
+  entries: StandingsEntry[]
+}
+
+export interface BracketTeam {
+  id: string
+  name: string
+  abbreviation: string
+  flagEmoji: string
+  score?: number
+  winner?: boolean
+}
+
+export interface BracketMatchup {
+  id: string
+  date: string
+  status: 'pre' | 'in' | 'post'
+  home: BracketTeam
+  away: BracketTeam
+}
+
+export interface BracketRound {
+  name: string
+  matchups: BracketMatchup[]
+}
+
 export interface Settings {
   notificationMinutes: number
   soundEnabled: boolean

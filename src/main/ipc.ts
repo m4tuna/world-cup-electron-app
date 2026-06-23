@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow, shell } from 'electron'
-import { fetchUpcomingMatches, fetchMatchSummary } from './api'
+import { fetchUpcomingMatches, fetchMatchSummary, fetchStandings, fetchBracket } from './api'
 import {
   getSettings, setNotificationMinutes, setSoundEnabled,
   unsubscribeMatch, resubscribeMatch, resetSubscriptions,
@@ -29,6 +29,8 @@ export function registerIpcHandlers(win: BrowserWindow) {
   ipcMain.handle('get-cached-matches', () => getCachedMatches())
   ipcMain.handle('get-upcoming-matches', async (_, days: number) => fetchUpcomingMatches(days))
   ipcMain.handle('get-match-summary', async (_, matchId: string) => fetchMatchSummary(matchId))
+  ipcMain.handle('get-standings', async () => fetchStandings())
+  ipcMain.handle('get-bracket', async () => fetchBracket())
 
   ipcMain.handle('get-prompt-queue', () => getPromptQueue())
   ipcMain.handle('add-prompt', (_, text: string) => {

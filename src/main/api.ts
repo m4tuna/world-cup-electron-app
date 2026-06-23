@@ -410,6 +410,134 @@ export async function fetchMatchSummary(eventId: string): Promise<MatchSummaryDa
   return { homeTeamId, awayTeamId, homeLineup, awayLineup, stats, events, commentary, odds, attendance, venueName }
 }
 
+// ── Standings ────────────────────────────────────────────────────────
+
+export interface StandingsEntry {
+  teamId: string
+  name: string
+  abbreviation: string
+  flagEmoji: string
+  played: number
+  w: number
+  d: number
+  l: number
+  gf: number
+  ga: number
+  gd: number
+  pts: number
+}
+
+export interface StandingsGroup {
+  name: string
+  entries: StandingsEntry[]
+}
+
+export async function fetchStandings(): Promise<StandingsGroup[]> {
+  const data = await fetchJSON(`${ESPN_BASE}/standings`) as Record<string, unknown>
+  const children = (data.children as unknown[]) ?? []
+
+  const groups: StandingsGroup[] = []
+  for (const child of children) {
+    const group = child as Record<string, unknown>
+    const rawEntries = ((group.standings as Record<string, unknown>)?.entries as unknown[]) ?? []
+    const entries: StandingsEntry[] = rawEntries.map((entry) => {
+      const e = entry as Record<string, unknown>
+      const team = e.team as Record<string, unknown> | undefined
+      const stats = (e.stats as Record<string, unknown>[]) ?? []
+      const getStat = (name: string) => Number(stats.find((s) => s.name === name)?.value ?? 0)
+      const abbr = String(team?.abbreviation ?? '')
+      return {
+        teamId: String(team?.id ?? ''),
+        name: String(team?.displayName ?? abbr),
+        abbreviation: abbr,
+        flagEmoji: flagEmoji(abbr),
+        played: getStat('gamesPlayed'),
+        w: getStat('wins'),
+        d: getStat('ties'),
+        l: getStat('losses'),
+        gf: getStat('pointsFor'),
+        ga: getStat('pointsAgainst'),
+        gd: getStat('pointDifferential'),
+        pts: getStat('points'),
+      }
+    })
+    if (entries.length > 0) groups.push({ name: String(group.name ?? ''), entries })
+  }
+  return groups
+}
+
+// ── Bracket ──────────────────────────────────────────────────────────
+
+export interface BracketTeam {
+  id: string
+  name: string
+  abbreviation: string
+  flagEmoji: string
+  score?: number
+  winner?: boolean
+}
+
+export interface BracketMatchup {
+  id: string
+  date: string
+  status: 'pre' | 'in' | 'post'
+  home: BracketTeam
+  away: BracketTeam
+}
+
+export interface BracketRound {
+  name: string
+  matchups: BracketMatchup[]
+}
+
+export async function fetchBracket(): Promise<BracketRound[]> {
+  try {
+    const data = await fetchJSON(`${ESPN_BASE}/bracket`) as Record<string, unknown>
+    const bracket = data.bracket as Record<string, unknown> | undefined
+    const rounds = (bracket?.rounds as unknown[]) ?? []
+
+    const parseBracketTeam = (t: Record<string, unknown> | undefined): BracketTeam => {
+      if (!t) return { id: '', name: 'TBD', abbreviation: 'TBD', flagEmoji: '🏳️' }
+      const team = t.team as Record<string, unknown> | undefined
+      const abbr = String(team?.abbreviation ?? '')
+      const scoreStr = String(t.score ?? '')
+      return {
+        id: String(team?.id ?? ''),
+        name: String(team?.displayName ?? abbr),
+        abbreviation: abbr || 'TBD',
+        flagEmoji: abbr ? flagEmoji(abbr) : '🏳️',
+        score: scoreStr !== '' && scoreStr !== 'undefined' ? parseInt(scoreStr) || 0 : undefined,
+        winner: Boolean(t.winner),
+      }
+    }
+
+    return rounds.map((r) => {
+      const round = r as Record<string, unknown>
+      const competitions = (round.competitions as unknown[]) ?? []
+      return {
+        name: String(round.displayName ?? round.name ?? ''),
+        matchups: competitions.map((c) => {
+          const comp = c as Record<string, unknown>
+          const competitors = (comp.competitors as unknown[]) ?? []
+          const home = competitors.find((x) => (x as Record<string, unknown>).homeAway === 'home') as Record<string, unknown> | undefined
+          const away = competitors.find((x) => (x as Record<string, unknown>).homeAway === 'away') as Record<string, unknown> | undefined
+          const state = String(((comp.status as Record<string, unknown>)?.type as Record<string, unknown>)?.state ?? 'pre')
+          return {
+            id: String(comp.id ?? ''),
+            date: String(comp.date ?? ''),
+            status: state === 'in' ? 'in' : state === 'post' ? 'post' : 'pre',
+            home: parseBracketTeam(home),
+            away: parseBracketTeam(away),
+          }
+        })
+      }
+    }).filter((r) => r.matchups.length > 0)
+  } catch {
+    return []
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────
 const playerPhotoCache = new Map<string, string>()
 
 export async function fetchPlayerPhoto(playerName: string): Promise<string | null> {

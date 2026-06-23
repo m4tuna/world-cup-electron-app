@@ -39,6 +39,8 @@ const api = {
   scanCastDevices: () => ipcRenderer.invoke('cast:scan'),
   resizePanel: (h: number) => ipcRenderer.send('panel:resize', h),
   getMatchSummary: (matchId: string) => ipcRenderer.invoke('get-match-summary', matchId),
+  getStandings: () => ipcRenderer.invoke('get-standings'),
+  getBracket: () => ipcRenderer.invoke('get-bracket'),
   openSpectrum: () => ipcRenderer.invoke('cast:open-spectrum'),
   onCastDevices: (cb: (devices: unknown[]) => void) => {
     const handler = (_: unknown, devices: unknown[]) => cb(devices)

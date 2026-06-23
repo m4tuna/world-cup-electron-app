@@ -299,6 +299,8 @@ export default function MatchDetail({ match, onBack }: { match: Match; onBack: (
 
   const isLive = match.status === 'in'
   const isPost = match.status === 'post'
+  const homeWins = isPost && match.homeScore > match.awayScore
+  const awayWins = isPost && match.awayScore > match.homeScore
   const homePhoto = match.homeTeam.starPlayerPhoto || match.homeTeam.teamLogo
   const awayPhoto = match.awayTeam.starPlayerPhoto || match.awayTeam.teamLogo
 
@@ -348,7 +350,7 @@ export default function MatchDetail({ match, onBack }: { match: Match; onBack: (
 
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: '12px' }}>
               {/* Home */}
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px', opacity: awayWins ? 0.55 : 1 }}>
                 <span style={{ fontSize: '32px' }}>{match.homeTeam.flagEmoji}</span>
                 <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>{match.homeTeam.abbreviation}</span>
                 {summary?.events.filter(e => e.teamId === summary.homeTeamId && (e.type === 'goal' || e.type === 'ownGoal' || e.type === 'penalty')).map((g, i) => (
@@ -362,9 +364,9 @@ export default function MatchDetail({ match, onBack }: { match: Match; onBack: (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', paddingTop: '4px' }}>
                 {(isLive || isPost) ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '48px', fontWeight: 900, color: '#fff', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{match.homeScore}</span>
+                    <span style={{ fontSize: '48px', fontWeight: 900, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: homeWins ? 'rgba(74,222,128,0.95)' : awayWins ? 'rgba(255,255,255,0.35)' : '#fff' }}>{match.homeScore}</span>
                     <span style={{ fontSize: '22px', color: 'rgba(255,255,255,0.45)', fontWeight: 300 }}>–</span>
-                    <span style={{ fontSize: '48px', fontWeight: 900, color: '#fff', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{match.awayScore}</span>
+                    <span style={{ fontSize: '48px', fontWeight: 900, lineHeight: 1, fontVariantNumeric: 'tabular-nums', color: awayWins ? 'rgba(74,222,128,0.95)' : homeWins ? 'rgba(255,255,255,0.35)' : '#fff' }}>{match.awayScore}</span>
                   </div>
                 ) : (
                   <span style={{ fontSize: '22px', color: 'rgba(255,255,255,0.5)', fontWeight: 300, padding: '12px 0' }}>vs</span>
@@ -379,7 +381,7 @@ export default function MatchDetail({ match, onBack }: { match: Match; onBack: (
               </div>
 
               {/* Away */}
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px', opacity: homeWins ? 0.55 : 1 }}>
                 <span style={{ fontSize: '32px' }}>{match.awayTeam.flagEmoji}</span>
                 <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>{match.awayTeam.abbreviation}</span>
                 {summary?.events.filter(e => e.teamId === summary.awayTeamId && (e.type === 'goal' || e.type === 'ownGoal' || e.type === 'penalty')).map((g, i) => (
