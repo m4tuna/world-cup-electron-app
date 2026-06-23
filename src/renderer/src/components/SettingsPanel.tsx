@@ -59,7 +59,9 @@ export default function SettingsPanel({
   settings, onSetMinutes, onSetSound, onResetSubscriptions,
   onSetWatchProvider, onSetWatchMethod, onBack,
 }: Props) {
-  const selectedProvider = getProviderByUrl(settings.watchProviderUrl)
+  const watchMethod = settings.watchMethod ?? 'browser'
+  const watchProviderUrl = settings.watchProviderUrl ?? 'https://watch.spectrum.net'
+  const selectedProvider = getProviderByUrl(watchProviderUrl)
 
   return (
     <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -110,7 +112,7 @@ export default function SettingsPanel({
       <div className="bg-white/5 rounded-xl border border-white/8 overflow-hidden">
         <p style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255,255,255,0.5)', padding: '12px 14px 8px' }}>Launch method</p>
         {WATCH_METHODS.map((m, i) => {
-          const sel = settings.watchMethod === m.id
+          const sel = watchMethod === m.id
           return (
             <button
               key={m.id}
@@ -156,7 +158,7 @@ export default function SettingsPanel({
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '5px' }}>
                 {group.map((p) => {
-                  const sel = settings.watchProviderUrl === p.url
+                  const sel = watchProviderUrl === p.url
                   return (
                     <button
                       key={p.id}

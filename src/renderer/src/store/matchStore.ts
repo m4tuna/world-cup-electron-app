@@ -22,7 +22,7 @@ export const useMatchStore = create<MatchStore>((set) => ({
   prompts: [],
   setTodayMatches: (matches) => set({ todayMatches: matches }),
   setUpcomingMatches: (matches) => set({ upcomingMatches: matches }),
-  setSettings: (settings) => set({ settings }),
+  setSettings: (incoming) => set((state) => ({ settings: { ...state.settings, ...incoming } })),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setPrompts: (prompts) => set({ prompts: prompts }),
 }))
