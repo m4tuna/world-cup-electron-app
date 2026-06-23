@@ -1,0 +1,28 @@
+import { create } from 'zustand'
+import type { Match, Settings } from '../types'
+
+interface MatchStore {
+  todayMatches: Match[]
+  upcomingMatches: Match[]
+  settings: Settings
+  activeTab: 'live' | 'schedule' | 'settings'
+  prompts: string[]
+  setTodayMatches: (matches: Match[]) => void
+  setUpcomingMatches: (matches: Match[]) => void
+  setSettings: (settings: Settings) => void
+  setActiveTab: (tab: 'live' | 'schedule' | 'settings') => void
+  setPrompts: (prompts: string[]) => void
+}
+
+export const useMatchStore = create<MatchStore>((set) => ({
+  todayMatches: [],
+  upcomingMatches: [],
+  settings: { notificationMinutes: 30, soundEnabled: true, unsubscribedMatches: [] },
+  activeTab: 'live',
+  prompts: [],
+  setTodayMatches: (matches) => set({ todayMatches: matches }),
+  setUpcomingMatches: (matches) => set({ upcomingMatches: matches }),
+  setSettings: (settings) => set({ settings }),
+  setActiveTab: (tab) => set({ activeTab: tab }),
+  setPrompts: (prompts) => set({ prompts: prompts }),
+}))

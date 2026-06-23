@@ -1,0 +1,62 @@
+{
+  "name": "worldcup-notifier",
+  "version": "1.0.0",
+  "description": "World Cup 2026 match notifier for macOS",
+  "main": "./out/main/index.js",
+  "homepage": ".",
+  "scripts": {
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build && electron-builder",
+    "build:unpack": "electron-vite build && electron-builder --dir",
+    "preview": "electron-vite preview"
+  },
+  "dependencies": {
+    "castv2": "^0.1.10",
+    "electron-store": "^8.2.0",
+    "multicast-dns": "^7.2.5",
+    "qrcode.react": "^4.2.0",
+    "zustand": "^5.0.3"
+  },
+  "devDependencies": {
+    "@electron-toolkit/eslint-config-prettier": "^2.0.0",
+    "@electron-toolkit/eslint-config-ts": "^2.0.0",
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "@electron-toolkit/utils": "^3.0.0",
+    "@tailwindcss/vite": "^4.1.10",
+    "@types/node": "^22.13.10",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^34.3.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^3.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^4.1.10",
+    "typescript": "^5.7.3",
+    "vite": "^6.2.3"
+  },
+  "build": {
+    "appId": "com.m42.worldcup-notifier",
+    "productName": "World Cup Notifier",
+    "mac": {
+      "category": "public.app-category.sports",
+      "target": "dmg"
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*",
+      "resources/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/",
+        "to": "resources/"
+      }
+    ]
+  }
+}
