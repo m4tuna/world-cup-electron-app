@@ -17,7 +17,7 @@ interface MatchStore {
 export const useMatchStore = create<MatchStore>((set) => ({
   todayMatches: [],
   upcomingMatches: [],
-  settings: { notificationMinutes: 30, soundEnabled: true, unsubscribedMatches: [] },
+  settings: { notificationMinutes: 30, soundEnabled: true, unsubscribedMatches: [], watchProviderUrl: 'https://watch.spectrum.net', watchMethod: 'browser' },
   activeTab: 'live',
   prompts: [],
   setTodayMatches: (matches) => set({ todayMatches: matches }),

@@ -99,4 +99,6 @@ export interface Settings {
   notificationMinutes: number
   soundEnabled: boolean
   unsubscribedMatches: string[]
+  watchProviderUrl: string
+  watchMethod: 'browser' | 'airplay'
 }

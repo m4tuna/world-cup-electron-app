@@ -1,9 +1,11 @@
 import { ipcMain, BrowserWindow, shell } from 'electron'
+import { execFile } from 'child_process'
 import { fetchUpcomingMatches, fetchMatchSummary, fetchStandings, fetchBracket, fetchMatchesWithGoals, fetchTeamPage, fetchPlayerPage } from './api'
 import {
   getSettings, setNotificationMinutes, setSoundEnabled,
   unsubscribeMatch, resubscribeMatch, resetSubscriptions,
   getPromptQueue, addPrompt, deletePrompt, clearPrompts,
+  getWatchProviderUrl, setWatchProviderUrl, getWatchMethod, setWatchMethod,
 } from './store'
 import { getCachedMatches } from './poller'
 import { getDevices, refreshStatus, scanNow } from './cast'
@@ -50,7 +52,22 @@ export function registerIpcHandlers(win: BrowserWindow) {
   ipcMain.handle('cast:get-devices', () => getDevices())
   ipcMain.handle('cast:refresh', (_, deviceId: string) => refreshStatus(deviceId))
   ipcMain.handle('cast:scan', () => scanNow())
-  ipcMain.handle('cast:open-spectrum', () => shell.openExternal('https://watch.spectrum.net'))
+  ipcMain.handle('cast:open-spectrum', () => {
+    const url = getWatchProviderUrl()
+    if (getWatchMethod() === 'airplay') {
+      execFile('open', ['-a', 'Safari', url])
+    } else {
+      shell.openExternal(url)
+    }
+  })
+  ipcMain.handle('set-watch-provider-url', (_, url: string) => {
+    setWatchProviderUrl(url)
+    win.webContents.send('settings:update', getSettings())
+  })
+  ipcMain.handle('set-watch-method', (_, method: 'browser' | 'airplay') => {
+    setWatchMethod(method)
+    win.webContents.send('settings:update', getSettings())
+  })
   ipcMain.handle('open-url', (_, url: string) => shell.openExternal(url))
   ipcMain.handle('get-team-page', async (_, teamId: string) => fetchTeamPage(teamId))
   ipcMain.handle('get-player-page', async (_, playerId: string) => fetchPlayerPage(playerId))

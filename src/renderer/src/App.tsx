@@ -6,7 +6,8 @@ import MatchDetail from './components/MatchDetail'
 import SettingsPanel from './components/SettingsPanel'
 import GroupStandings from './components/GroupStandings'
 import Bracket from './components/Bracket'
-import SpectrumQR from './components/SpectrumQR'
+import WatchNowCard from './components/SpectrumQR'
+import { getProviderByUrl } from './lib/providers'
 import CastPanel from './components/CastPanel'
 import TeamPage from './components/TeamPage'
 import PlayerPage from './components/PlayerPage'
@@ -135,6 +136,12 @@ export default function App() {
   const handleSetMinutes = (m: number) => { window.api.setNotificationMinutes(m); setSettings({ ...settings, notificationMinutes: m }) }
   const handleSetSound = (e: boolean) => { window.api.setSoundEnabled(e); setSettings({ ...settings, soundEnabled: e }) }
   const handleResetSubs = () => { window.api.resetSubscriptions(); setSettings({ ...settings, unsubscribedMatches: [] }) }
+  const handleSetWatchProvider = (url: string) => { window.api.setWatchProviderUrl(url); setSettings({ ...settings, watchProviderUrl: url }) }
+  const handleSetWatchMethod = (m: 'browser' | 'airplay') => { window.api.setWatchMethod(m); setSettings({ ...settings, watchMethod: m }) }
+
+  const watchProvider = getProviderByUrl(settings.watchProviderUrl ?? '')
+  const watchProviderName = watchProvider?.name ?? 'Watch Live'
+  const watchMethod = settings.watchMethod ?? 'browser'
 
   const handleTeamClick = useCallback((teamId: string, teamName: string, flagEmoji: string) => {
     if (teamId) push({ type: 'team', teamId, teamName, flagEmoji })
@@ -353,9 +360,9 @@ export default function App() {
             />
           ) : current.type === 'settings' ? (
             <>
-              <SettingsPanel settings={settings} onSetMinutes={handleSetMinutes} onSetSound={handleSetSound} onResetSubscriptions={handleResetSubs} onBack={back} />
+              <SettingsPanel settings={settings} onSetMinutes={handleSetMinutes} onSetSound={handleSetSound} onResetSubscriptions={handleResetSubs} onSetWatchProvider={handleSetWatchProvider} onSetWatchMethod={handleSetWatchMethod} onBack={back} />
               <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', margin: '0 20px' }} />
-              <CastPanel />
+              <CastPanel watchProviderName={watchProviderName} watchMethod={watchMethod} />
             </>
           ) : (<>
 
@@ -394,7 +401,7 @@ export default function App() {
                   )}
                 </>
               )}
-              <div style={{ marginBottom: '8px' }}><SpectrumQR hidden={isCasting} /></div>
+              <div style={{ marginBottom: '8px' }}><WatchNowCard hidden={isCasting} watchProviderUrl={settings.watchProviderUrl ?? 'https://watch.spectrum.net'} watchMethod={watchMethod} /></div>
             </div>
           )}
 
@@ -586,7 +593,7 @@ export default function App() {
                   ))}
                 </div>
               )}
-              <SpectrumQR hidden={isCasting} />
+              <WatchNowCard hidden={isCasting} watchProviderUrl={settings.watchProviderUrl ?? 'https://watch.spectrum.net'} watchMethod={watchMethod} />
             </div>
           )}
 

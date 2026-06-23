@@ -32,6 +32,8 @@ declare global {
       getMatchesByDate: (dateStr: string) => Promise<unknown[]>
       openSpectrum: () => Promise<void>
       openUrl: (url: string) => Promise<void>
+      setWatchProviderUrl: (url: string) => Promise<void>
+      setWatchMethod: (method: 'browser' | 'airplay') => Promise<void>
       getTeamPage: (teamId: string) => Promise<unknown>
       getPlayerPage: (playerId: string) => Promise<unknown>
       onCastDevices: (cb: (devices: unknown[]) => void) => () => void

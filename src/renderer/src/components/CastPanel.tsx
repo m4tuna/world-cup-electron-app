@@ -103,7 +103,7 @@ function DeviceRow({ device, onRefresh }: { device: CastDevice; onRefresh: (id: 
   )
 }
 
-export default function CastPanel() {
+export default function CastPanel({ watchProviderName = 'Watch Live', watchMethod = 'browser' }: { watchProviderName?: string; watchMethod?: 'browser' | 'airplay' }) {
   const [devices, setDevices] = useState<CastDevice[]>([])
   const [scanning, setScanning] = useState(true)
 
@@ -200,8 +200,14 @@ export default function CastPanel() {
               gap: '6px',
             }}
           >
-            <span>🌐</span>
-            {anySpectrum ? 'Spectrum is casting — open in browser' : 'Open Spectrum TV in Brave'}
+            {watchMethod === 'airplay'
+              ? <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg></>
+              : <span>🌐</span>}
+            {anySpectrum
+              ? `${watchProviderName} is casting`
+              : watchMethod === 'airplay'
+                ? `AirPlay ${watchProviderName} in Safari`
+                : `Open ${watchProviderName} in browser`}
           </button>
         )}
 

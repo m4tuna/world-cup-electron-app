@@ -6,6 +6,8 @@ interface Schema {
   unsubscribedMatches: string[]
   windowBounds: { x: number; y: number; width: number; height: number } | null
   promptQueue: string[]
+  watchProviderUrl: string
+  watchMethod: 'browser' | 'airplay'
 }
 
 export const store = new Store<Schema>({
@@ -15,6 +17,8 @@ export const store = new Store<Schema>({
     unsubscribedMatches: [],
     windowBounds: null,
     promptQueue: [],
+    watchProviderUrl: 'https://watch.spectrum.net',
+    watchMethod: 'browser',
   },
 })
 
@@ -23,7 +27,25 @@ export function getSettings() {
     notificationMinutes: store.get('notificationMinutes'),
     soundEnabled: store.get('soundEnabled'),
     unsubscribedMatches: store.get('unsubscribedMatches'),
+    watchProviderUrl: store.get('watchProviderUrl'),
+    watchMethod: store.get('watchMethod'),
   }
+}
+
+export function getWatchProviderUrl() {
+  return store.get('watchProviderUrl')
+}
+
+export function setWatchProviderUrl(url: string) {
+  store.set('watchProviderUrl', url)
+}
+
+export function getWatchMethod(): 'browser' | 'airplay' {
+  return store.get('watchMethod')
+}
+
+export function setWatchMethod(method: 'browser' | 'airplay') {
+  store.set('watchMethod', method)
 }
 
 export function setNotificationMinutes(minutes: number) {
