@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react'
 import type { Match } from '../types'
 
 interface MatchPlayer {
-  name: string; shortName: string; jersey: string; position: string
+  id: string; name: string; shortName: string; jersey: string; position: string
   starter: boolean; subbedIn: boolean; subbedOut: boolean
 }
 interface MatchEvent {
   type: 'goal' | 'ownGoal' | 'penalty' | 'yellowCard' | 'redCard' | 'sub'
-  clock: string; teamId: string; playerName: string; assistName?: string; playerOut?: string
+  clock: string; teamId: string
+  playerId?: string; playerName: string
+  assistName?: string; assistPlayerId?: string
+  playerOut?: string; playerOutId?: string
 }
 interface MatchStat { label: string; home: string; away: string }
 interface CommentaryEntry {
@@ -215,18 +218,24 @@ function isAnnouncement(entry: CommentaryEntry): boolean {
 }
 
 // ── Lineup column ────────────────────────────────────────────────────
-function LineupColumn({ players, side, teamAbbr, flagEmoji }: {
+function LineupColumn({ players, side, teamAbbr, flagEmoji, teamId, teamName, onTeamClick, onPlayerClick }: {
   players: MatchPlayer[]; side: 'home' | 'away'; teamAbbr: string; flagEmoji: string
+  teamId: string; teamName: string
+  onTeamClick?: (teamId: string, teamName: string, flagEmoji: string) => void
+  onPlayerClick?: (playerId: string, name: string, position: string, teamFlag: string, teamAbbr: string) => void
 }) {
   const starters = players.filter((p) => p.starter)
   const bench = players.filter((p) => !p.starter)
 
   const Row = ({ p }: { p: MatchPlayer }) => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexDirection: side === 'away' ? 'row-reverse' : 'row', padding: '3px 0' }}>
+    <button
+      onClick={() => onPlayerClick?.(p.id, p.name, p.position, flagEmoji, teamAbbr)}
+      style={{ display: 'flex', alignItems: 'center', gap: '6px', flexDirection: side === 'away' ? 'row-reverse' : 'row', padding: '3px 0', background: 'none', border: 'none', cursor: p.id && onPlayerClick ? 'pointer' : 'default', fontFamily: 'inherit', width: '100%', textAlign: 'left' }}
+    >
       <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(255,255,255,0.07)', fontSize: '8px', fontWeight: 700, color: 'rgba(255,255,255,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         {p.jersey}
       </span>
-      <div style={{ minWidth: 0 }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
         <p style={{ fontSize: '11px', fontWeight: p.starter ? 600 : 400, color: p.subbedIn ? 'rgba(74,222,128,0.9)' : p.subbedOut ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.82)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: side === 'away' ? 'right' : 'left' }}>
           {p.shortName || p.name}
           {p.subbedIn && <span style={{ fontSize: '9px', marginLeft: '3px', color: 'rgba(74,222,128,0.7)' }}>↑</span>}
@@ -234,15 +243,18 @@ function LineupColumn({ players, side, teamAbbr, flagEmoji }: {
         </p>
         <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.42)', margin: 0, textAlign: side === 'away' ? 'right' : 'left' }}>{p.position}</p>
       </div>
-    </div>
+    </button>
   )
 
   return (
     <div style={{ flex: 1, minWidth: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '8px', flexDirection: side === 'away' ? 'row-reverse' : 'row' }}>
+      <button
+        onClick={() => onTeamClick?.(teamId, teamName, flagEmoji)}
+        style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '8px', flexDirection: side === 'away' ? 'row-reverse' : 'row', background: 'none', border: 'none', padding: 0, cursor: teamId && onTeamClick ? 'pointer' : 'default', fontFamily: 'inherit', width: '100%' }}
+      >
         <span style={{ fontSize: '15px' }}>{flagEmoji}</span>
         <span style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.6)' }}>{teamAbbr}</span>
-      </div>
+      </button>
       {starters.map((p, i) => <Row key={i} p={p} />)}
       {bench.length > 0 && (
         <>
@@ -277,7 +289,11 @@ function StatBar({ label, home, away }: MatchStat) {
   )
 }
 
-export default function MatchDetail({ match, onBack }: { match: Match; onBack: () => void }) {
+export default function MatchDetail({ match, onBack, onTeamClick, onPlayerClick }: {
+  match: Match; onBack: () => void
+  onTeamClick?: (teamId: string, teamName: string, flagEmoji: string) => void
+  onPlayerClick?: (playerId: string, name: string, position: string, teamFlag: string, teamAbbr: string) => void
+}) {
   const [summary, setSummary] = useState<Summary | null>(null)
   const [tab, setTab] = useState<Tab>('feed')
   const [loading, setLoading] = useState(true)
@@ -351,8 +367,10 @@ export default function MatchDetail({ match, onBack }: { match: Match; onBack: (
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: '12px' }}>
               {/* Home */}
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px', opacity: awayWins ? 0.55 : 1 }}>
-                <span style={{ fontSize: '32px' }}>{match.homeTeam.flagEmoji}</span>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>{match.homeTeam.abbreviation}</span>
+                <button onClick={() => onTeamClick?.(match.homeTeam.id, match.homeTeam.name, match.homeTeam.flagEmoji)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', fontFamily: 'inherit' }}>
+                  <span style={{ fontSize: '32px' }}>{match.homeTeam.flagEmoji}</span>
+                  <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>{match.homeTeam.abbreviation}</span>
+                </button>
                 {summary?.events.filter(e => e.teamId === summary.homeTeamId && (e.type === 'goal' || e.type === 'ownGoal' || e.type === 'penalty')).map((g, i) => (
                   <p key={i} style={{ fontSize: '9px', color: 'rgba(255,255,255,0.75)', margin: 0, textAlign: 'right' }}>
                     {g.clock}' {g.playerName}{g.type === 'penalty' ? ' (P)' : g.type === 'ownGoal' ? ' (OG)' : ''}
@@ -382,8 +400,10 @@ export default function MatchDetail({ match, onBack }: { match: Match; onBack: (
 
               {/* Away */}
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px', opacity: homeWins ? 0.55 : 1 }}>
-                <span style={{ fontSize: '32px' }}>{match.awayTeam.flagEmoji}</span>
-                <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>{match.awayTeam.abbreviation}</span>
+                <button onClick={() => onTeamClick?.(match.awayTeam.id, match.awayTeam.name, match.awayTeam.flagEmoji)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px', fontFamily: 'inherit' }}>
+                  <span style={{ fontSize: '32px' }}>{match.awayTeam.flagEmoji}</span>
+                  <span style={{ fontSize: '14px', fontWeight: 800, color: '#fff' }}>{match.awayTeam.abbreviation}</span>
+                </button>
                 {summary?.events.filter(e => e.teamId === summary.awayTeamId && (e.type === 'goal' || e.type === 'ownGoal' || e.type === 'penalty')).map((g, i) => (
                   <p key={i} style={{ fontSize: '9px', color: 'rgba(255,255,255,0.75)', margin: 0 }}>
                     {g.clock}' {g.playerName}{g.type === 'penalty' ? ' (P)' : g.type === 'ownGoal' ? ' (OG)' : ''}
@@ -458,9 +478,9 @@ export default function MatchDetail({ match, onBack }: { match: Match; onBack: (
           <div style={{ paddingTop: '14px' }}>
             {summary && (summary.homeLineup.length > 0 || summary.awayLineup.length > 0) ? (
               <div style={{ display: 'flex', gap: '14px' }}>
-                <LineupColumn players={summary.homeLineup} side="home" teamAbbr={match.homeTeam.abbreviation} flagEmoji={match.homeTeam.flagEmoji} />
+                <LineupColumn players={summary.homeLineup} side="home" teamAbbr={match.homeTeam.abbreviation} flagEmoji={match.homeTeam.flagEmoji} teamId={match.homeTeam.id} teamName={match.homeTeam.name} onTeamClick={onTeamClick} onPlayerClick={onPlayerClick} />
                 <div style={{ width: '1px', background: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
-                <LineupColumn players={summary.awayLineup} side="away" teamAbbr={match.awayTeam.abbreviation} flagEmoji={match.awayTeam.flagEmoji} />
+                <LineupColumn players={summary.awayLineup} side="away" teamAbbr={match.awayTeam.abbreviation} flagEmoji={match.awayTeam.flagEmoji} teamId={match.awayTeam.id} teamName={match.awayTeam.name} onTeamClick={onTeamClick} onPlayerClick={onPlayerClick} />
               </div>
             ) : (
               <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.45)', fontSize: '12px', padding: '24px 0' }}>

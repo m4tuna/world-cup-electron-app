@@ -1,6 +1,7 @@
 import { net } from 'electron'
 
 export interface GoalScorer {
+  playerId?: string
   playerName: string
   clock: string
   teamId: string
@@ -131,7 +132,9 @@ async function fetchGoalScorers(eventId: string): Promise<GoalScorer[]> {
         const scorer = (participants[0] as Record<string, unknown>)?.athlete as Record<string, unknown> | undefined
         const team = detail.team as Record<string, unknown> | undefined
         const typeText = String((detail.type as Record<string, unknown>)?.text ?? '')
+        const pid = String(scorer?.id ?? '')
         return {
+          playerId: pid || undefined,
           playerName: String(scorer?.shortName ?? scorer?.displayName ?? ''),
           clock: String((detail.clock as Record<string, unknown>)?.displayValue ?? ''),
           teamId: String(team?.id ?? ''),
@@ -220,6 +223,7 @@ export async function fetchUpcomingMatches(days = 7): Promise<Match[]> {
 }
 
 export interface MatchPlayer {
+  id: string
   name: string
   shortName: string
   jersey: string
@@ -233,9 +237,12 @@ export interface MatchEvent {
   type: 'goal' | 'ownGoal' | 'penalty' | 'yellowCard' | 'redCard' | 'sub'
   clock: string
   teamId: string
+  playerId?: string
   playerName: string
   assistName?: string
+  assistPlayerId?: string
   playerOut?: string
+  playerOutId?: string
 }
 
 export interface MatchStat {
@@ -312,9 +319,12 @@ export async function fetchMatchSummary(eventId: string): Promise<MatchSummaryDa
         type,
         clock,
         teamId: String(team?.id ?? ''),
+        playerId: String(primary?.id ?? '') || undefined,
         playerName: String(primary?.displayName ?? ''),
         assistName: type === 'goal' && secondary ? String(secondary.displayName ?? '') : undefined,
+        assistPlayerId: type === 'goal' && secondary ? String(secondary.id ?? '') || undefined : undefined,
         playerOut: type === 'sub' && secondary ? String(secondary.displayName ?? '') : undefined,
+        playerOutId: type === 'sub' && secondary ? String(secondary.id ?? '') || undefined : undefined,
       }
     })
     .filter((e) => e.playerName)
@@ -332,6 +342,7 @@ export async function fetchMatchSummary(eventId: string): Promise<MatchSummaryDa
       const athlete = player.athlete as Record<string, unknown> | undefined
       const posObj = player.position as Record<string, unknown> | undefined
       return {
+        id: String(athlete?.id ?? ''),
         name: String(athlete?.displayName ?? ''),
         shortName: String(athlete?.shortName ?? athlete?.displayName ?? ''),
         jersey: String(player.jersey ?? ''),
@@ -567,6 +578,150 @@ export async function fetchBracket(): Promise<BracketRound[]> {
       .map((slug) => ({ name: ROUND_NAMES[slug], matchups: roundMap.get(slug)! }))
   } catch {
     return []
+  }
+}
+
+// ── Team page ─────────────────────────────────────────────────────────
+
+export interface TeamPageAthlete {
+  id: string
+  name: string
+  shortName: string
+  jersey: string
+  position: string
+  photoUrl?: string
+}
+
+export interface TeamPageData {
+  id: string
+  name: string
+  abbreviation: string
+  flagEmoji: string
+  logoUrl?: string
+  coach?: string
+  record?: string
+  athletes: TeamPageAthlete[]
+}
+
+export async function fetchTeamPage(teamId: string): Promise<TeamPageData> {
+  try {
+    const data = await fetchJSON(`${ESPN_BASE}/teams/${teamId}?enable=roster`) as Record<string, unknown>
+    const team = data.team as Record<string, unknown> | undefined
+    if (!team) throw new Error('no team')
+
+    const abbr = String(team.abbreviation ?? '')
+    const logos = (team.logos as Record<string, unknown>[]) ?? []
+    const logoUrl = logos[0]?.href as string | undefined
+
+    const coachArr = (team.coaches as Record<string, unknown>[]) ?? []
+    const coachObj = coachArr[0] as Record<string, unknown> | undefined
+    const coachName = coachObj
+      ? String((coachObj.coach as Record<string, unknown>)?.displayName ?? coachObj.displayName ?? '')
+      : undefined
+
+    const recordItems = ((team.record as Record<string, unknown>)?.items as Record<string, unknown>[]) ?? []
+    const record = recordItems[0] ? String(recordItems[0].summary ?? '') : undefined
+
+    const raw = (team.athletes as Record<string, unknown>[]) ?? []
+    const athletes: TeamPageAthlete[] = raw.map((a) => {
+      const posObj = a.position as Record<string, unknown> | undefined
+      const headshot = a.headshot as Record<string, unknown> | undefined
+      return {
+        id: String(a.id ?? ''),
+        name: String(a.displayName ?? ''),
+        shortName: String(a.shortName ?? a.displayName ?? ''),
+        jersey: String(a.jersey ?? ''),
+        position: String(posObj?.abbreviation ?? posObj?.displayName ?? ''),
+        photoUrl: headshot?.href as string | undefined,
+      }
+    })
+
+    return {
+      id: String(team.id ?? teamId),
+      name: String(team.displayName ?? abbr),
+      abbreviation: abbr,
+      flagEmoji: flagEmoji(abbr),
+      logoUrl,
+      coach: coachName || undefined,
+      record: record || undefined,
+      athletes,
+    }
+  } catch {
+    return { id: teamId, name: 'Unknown', abbreviation: '', flagEmoji: '🏳️', athletes: [] }
+  }
+}
+
+// ── Player page ───────────────────────────────────────────────────────
+
+export interface PlayerPageData {
+  id: string
+  name: string
+  shortName: string
+  position: string
+  jersey: string
+  nationality: string
+  age?: number
+  dateOfBirth?: string
+  height?: string
+  weight?: string
+  photoUrl?: string
+  teamName?: string
+  teamAbbr?: string
+  teamId?: string
+}
+
+export async function fetchPlayerPage(playerId: string): Promise<PlayerPageData> {
+  try {
+    const data = await fetchJSON(
+      `https://sports.core.api.espn.com/v2/sports/soccer/athletes/${playerId}?lang=en&region=us`
+    ) as Record<string, unknown>
+
+    const position = data.position as Record<string, unknown> | undefined
+    const headshot = data.headshot as Record<string, unknown> | undefined
+
+    // Age from dateOfBirth
+    let age: number | undefined
+    let dateOfBirth: string | undefined
+    const dobStr = String(data.dateOfBirth ?? '')
+    if (dobStr) {
+      try {
+        const dob = new Date(dobStr)
+        const now = new Date()
+        age = now.getFullYear() - dob.getFullYear()
+        if (now < new Date(now.getFullYear(), dob.getMonth(), dob.getDate())) age--
+        dateOfBirth = dob.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+      } catch { /* ignore */ }
+    }
+
+    // Team — may be a $ref link or inline object
+    let teamName: string | undefined
+    let teamAbbr: string | undefined
+    let teamId: string | undefined
+    const teamRef = data.team as Record<string, unknown> | undefined
+    if (teamRef && !String(teamRef.$ref ?? '')) {
+      teamName = String(teamRef.displayName ?? teamRef.name ?? '')
+      teamAbbr = String(teamRef.abbreviation ?? '')
+      teamId = String(teamRef.id ?? '')
+    }
+
+    return {
+      id: playerId,
+      name: String(data.displayName ?? data.fullName ?? ''),
+      shortName: String(data.shortName ?? data.displayName ?? ''),
+      position: String(position?.displayName ?? position?.abbreviation ?? ''),
+      jersey: String(data.jersey ?? ''),
+      nationality: String(data.displayCountry ?? data.citizenship ?? ''),
+      age,
+      dateOfBirth,
+      height: String(data.displayHeight ?? ''),
+      weight: String(data.displayWeight ?? ''),
+      photoUrl: headshot?.href as string | undefined,
+      teamName: teamName || undefined,
+      teamAbbr: teamAbbr || undefined,
+      teamId: teamId || undefined,
+    }
+  } catch {
+    return { id: playerId, name: 'Unknown Player', shortName: '', position: '', jersey: '', nationality: '' }
   }
 }
 

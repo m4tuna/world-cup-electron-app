@@ -1,4 +1,5 @@
 export interface GoalScorer {
+  playerId?: string
   playerName: string
   clock: string
   teamId: string

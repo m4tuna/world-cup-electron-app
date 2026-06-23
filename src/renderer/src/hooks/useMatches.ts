@@ -25,7 +25,15 @@ declare global {
       refreshCastDevice: (id: string) => Promise<void>
       scanCastDevices: () => Promise<void>
       resizePanel: (h: number) => void
+      setPanelWidth?: (w: number) => void
+      getMatchSummary: (matchId: string) => Promise<unknown>
+      getStandings: () => Promise<unknown[]>
+      getBracket: () => Promise<unknown[]>
+      getMatchesByDate: (dateStr: string) => Promise<unknown[]>
       openSpectrum: () => Promise<void>
+      openUrl: (url: string) => Promise<void>
+      getTeamPage: (teamId: string) => Promise<unknown>
+      getPlayerPage: (playerId: string) => Promise<unknown>
       onCastDevices: (cb: (devices: unknown[]) => void) => () => void
     }
   }

@@ -5,11 +5,18 @@ interface Props {
   onSetMinutes: (m: number) => void
   onSetSound: (e: boolean) => void
   onResetSubscriptions: () => void
+  onBack: () => void
 }
 
-export default function SettingsPanel({ settings, onSetMinutes, onSetSound, onResetSubscriptions }: Props) {
+export default function SettingsPanel({ settings, onSetMinutes, onSetSound, onResetSubscriptions, onBack }: Props) {
   return (
     <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <button
+        onClick={onBack}
+        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.45)', cursor: 'pointer', fontSize: '12px', padding: '0 0 4px', display: 'flex', alignItems: 'center', gap: '4px', fontFamily: 'inherit', alignSelf: 'flex-start' }}
+      >
+        ← Back
+      </button>
       <h2 className="text-sm font-semibold text-white/50 uppercase tracking-wider">Notifications</h2>
 
       {/* Notification timing */}

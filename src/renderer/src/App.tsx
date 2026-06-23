@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useMatchStore } from './store/matchStore'
 import { useMatches } from './hooks/useMatches'
 import MatchCard from './components/MatchCard'
@@ -8,7 +8,16 @@ import GroupStandings from './components/GroupStandings'
 import Bracket from './components/Bracket'
 import SpectrumQR from './components/SpectrumQR'
 import CastPanel from './components/CastPanel'
+import TeamPage from './components/TeamPage'
+import PlayerPage from './components/PlayerPage'
 import type { Match, CastDevice } from './types'
+
+type NavEntry =
+  | { type: 'main' }
+  | { type: 'settings' }
+  | { type: 'match'; matchId: string }
+  | { type: 'team'; teamId: string; teamName: string; flagEmoji: string }
+  | { type: 'player'; playerId: string; playerName: string; position: string; teamFlag: string; teamAbbr: string }
 
 const TOURNAMENT_START = new Date('2026-06-11T00:00:00')
 const TOURNAMENT_END = new Date('2026-07-19T23:59:59')
@@ -37,9 +46,13 @@ export default function App() {
   const [caretX, setCaretX] = useState(250)
   const [castDevices, setCastDevices] = useState<CastDevice[]>([])
   const [matchesLoading, setMatchesLoading] = useState(true)
-  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
-  const [scheduleDate, setScheduleDate] = useState<Date>(() => new Date())
+  const [navStack, setNavStack] = useState<NavEntry[]>([{ type: 'main' }])
+  const current = navStack[navStack.length - 1]
+  const push = useCallback((e: NavEntry) => setNavStack(s => [...s, e]), [])
+  const back = useCallback(() => setNavStack(s => s.length > 1 ? s.slice(0, -1) : s), [])
+  const [scheduleDate, setScheduleDate] = useState<Date>(() => {
+    const d = new Date(); d.setDate(d.getDate() + 1); return d
+  })
   const [scheduleDayMatches, setScheduleDayMatches] = useState<Match[] | null>(null)
   const [scheduleDayLoading, setScheduleDayLoading] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
@@ -97,7 +110,7 @@ export default function App() {
     })
   }, [scheduleDate])
 
-  useEffect(() => { setShowCalendar(false) }, [activeTab])
+  useEffect(() => { setShowCalendar(false) }, [activeTab, current.type])
 
   useEffect(() => {
     if (!showCalendar) return
@@ -114,7 +127,7 @@ export default function App() {
   const todayPre = todayMatches.filter((m) => m.status === 'pre')
   const todayPost = todayMatches.filter((m) => m.status === 'post')
   useEffect(() => {
-    if (liveMatches.length > 0 && activeTab === 'schedule') setActiveTab('live')
+    if (liveMatches.length > 0 && activeTab === 'schedule' && current.type === 'main') setActiveTab('live')
   }, [liveMatches.length])
 
   const handleUnsubscribe = (id: string) => window.api.unsubscribeMatch(id)
@@ -123,13 +136,23 @@ export default function App() {
   const handleSetSound = (e: boolean) => { window.api.setSoundEnabled(e); setSettings({ ...settings, soundEnabled: e }) }
   const handleResetSubs = () => { window.api.resetSubscriptions(); setSettings({ ...settings, unsubscribedMatches: [] }) }
 
+  const handleTeamClick = useCallback((teamId: string, teamName: string, flagEmoji: string) => {
+    if (teamId) push({ type: 'team', teamId, teamName, flagEmoji })
+  }, [push])
+  const handlePlayerClick = useCallback((playerId: string, playerName: string, position: string, teamFlag: string, teamAbbr: string) => {
+    if (playerId) push({ type: 'player', playerId, playerName, position, teamFlag, teamAbbr })
+  }, [push])
+
   const isScheduleToday = isSameDay(scheduleDate, new Date())
   const scheduleDisplayMatches = isScheduleToday
     ? [...liveMatches, ...todayPre, ...todayPost]
     : scheduleDayMatches ?? []
   const scheduleIsLoading = isScheduleToday ? matchesLoading : scheduleDayLoading
 
-  const selectedMatch = [...todayMatches, ...upcomingMatches, ...(scheduleDayMatches ?? [])].find((m) => m.id === selectedMatchId) ?? null
+  const selectedMatchId = current.type === 'match' ? current.matchId : null
+  const selectedMatch = selectedMatchId
+    ? [...todayMatches, ...upcomingMatches, ...(scheduleDayMatches ?? [])].find((m) => m.id === selectedMatchId) ?? null
+    : null
 
   const castingDevice = castDevices.find((d) => d.status?.isPlaying) ?? null
   const isCasting = !!castingDevice
@@ -150,16 +173,20 @@ export default function App() {
   const CARD_BG = 'rgba(8, 8, 12, 0.98)'
   const BLUR = 'blur(28px) saturate(180%)'
 
-  // Resize window: match detail fills available height; normal view fits content
+  // Resize window: detail pages + tall tabs fill to screen height; live tab fits content
   useEffect(() => {
-    if (selectedMatchId || showSettings || activeTab === 'standings' || activeTab === 'bracket' || activeTab === 'schedule') {
-      window.api.resizePanel?.(9999) // fill to screen height; content scrolls within
+    if (current.type !== 'main' || activeTab === 'standings' || activeTab === 'bracket' || activeTab === 'schedule') {
+      window.api.resizePanel?.(9999)
     } else {
       const fixedH = fixedRef.current?.offsetHeight ?? 0
       const contentH = scrollRef.current?.scrollHeight ?? 0
       window.api.resizePanel?.(CARET_H + fixedH + contentH + 6)
     }
-  }, [activeTab, todayMatches.length, upcomingMatches.length, castDevices.length, selectedMatchId, showSettings])
+  }, [current.type, activeTab, todayMatches.length, upcomingMatches.length, castDevices.length])
+
+  useEffect(() => {
+    window.api.setPanelWidth?.(activeTab === 'bracket' ? 940 : 500)
+  }, [activeTab])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', background: 'transparent' }}>
@@ -250,11 +277,11 @@ export default function App() {
 
             {/* Settings gear */}
             <button
-              onClick={() => { setShowSettings((s) => !s); setSelectedMatchId(null) }}
+              onClick={() => current.type === 'settings' ? back() : push({ type: 'settings' })}
               title="Settings"
               style={{
-                background: showSettings ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.06)',
-                border: showSettings ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.1)',
+                background: current.type === 'settings' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.06)',
+                border: current.type === 'settings' ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.1)',
                 borderRadius: '8px',
                 height: '30px',
                 width: '30px',
@@ -263,7 +290,7 @@ export default function App() {
                 flexShrink: 0,
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={showSettings ? '#fff' : 'rgba(255,255,255,0.55)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={current.type === 'settings' ? '#fff' : 'rgba(255,255,255,0.55)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="3"/>
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
               </svg>
@@ -271,8 +298,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* ── Tabs (hidden in match detail and settings) ── */}
-        {!selectedMatch && !showSettings && (
+        {/* ── Tabs (only shown on main view) ── */}
+        {current.type === 'main' && (
           <>
             <div style={{ display: 'flex', gap: '3px', padding: `0 ${PAD}px 10px` }}>
               {TABS.map((tab) => (
@@ -299,11 +326,34 @@ export default function App() {
         {/* ── Scrollable content ── */}
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
 
-          {selectedMatch ? (
-            <MatchDetail match={selectedMatch} onBack={() => setSelectedMatchId(null)} />
-          ) : showSettings ? (
+          {current.type === 'player' ? (
+            <PlayerPage
+              playerId={current.playerId}
+              playerName={current.playerName}
+              position={current.position}
+              teamFlag={current.teamFlag}
+              teamAbbr={current.teamAbbr}
+              onBack={back}
+              onTeamClick={handleTeamClick}
+            />
+          ) : current.type === 'team' ? (
+            <TeamPage
+              teamId={current.teamId}
+              teamName={current.teamName}
+              flagEmoji={current.flagEmoji}
+              onBack={back}
+              onPlayerClick={handlePlayerClick}
+            />
+          ) : current.type === 'match' && selectedMatch ? (
+            <MatchDetail
+              match={selectedMatch}
+              onBack={back}
+              onTeamClick={handleTeamClick}
+              onPlayerClick={handlePlayerClick}
+            />
+          ) : current.type === 'settings' ? (
             <>
-              <SettingsPanel settings={settings} onSetMinutes={handleSetMinutes} onSetSound={handleSetSound} onResetSubscriptions={handleResetSubs} />
+              <SettingsPanel settings={settings} onSetMinutes={handleSetMinutes} onSetSound={handleSetSound} onResetSubscriptions={handleResetSubs} onBack={back} />
               <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', margin: '0 20px' }} />
               <CastPanel />
             </>
@@ -329,16 +379,16 @@ export default function App() {
               ) : (
                 <>
                   {liveMatches.map((m) => (
-                    <MatchCard key={m.id} match={m} isUnsubscribed={settings.unsubscribedMatches.includes(m.id)} onUnsubscribe={() => handleUnsubscribe(m.id)} onResubscribe={() => handleResubscribe(m.id)} onClick={() => setSelectedMatchId(m.id)} />
+                    <MatchCard key={m.id} match={m} isUnsubscribed={settings.unsubscribedMatches.includes(m.id)} onUnsubscribe={() => handleUnsubscribe(m.id)} onResubscribe={() => handleResubscribe(m.id)} onClick={() => push({ type: 'match', matchId: m.id })} onTeamClick={handleTeamClick} onPlayerClick={handlePlayerClick} />
                   ))}
                   {todayPre.map((m) => (
-                    <MatchCard key={m.id} match={m} isUnsubscribed={settings.unsubscribedMatches.includes(m.id)} onUnsubscribe={() => handleUnsubscribe(m.id)} onResubscribe={() => handleResubscribe(m.id)} onClick={() => setSelectedMatchId(m.id)} />
+                    <MatchCard key={m.id} match={m} isUnsubscribed={settings.unsubscribedMatches.includes(m.id)} onUnsubscribe={() => handleUnsubscribe(m.id)} onResubscribe={() => handleResubscribe(m.id)} onClick={() => push({ type: 'match', matchId: m.id })} onTeamClick={handleTeamClick} onPlayerClick={handlePlayerClick} />
                   ))}
                   {todayPost.length > 0 && (
                     <>
                       <div style={{ fontSize: '9px', fontWeight: 600, color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.1em', paddingLeft: '2px' }}>Final</div>
                       {todayPost.map((m) => (
-                        <MatchCard key={m.id} match={m} isUnsubscribed={settings.unsubscribedMatches.includes(m.id)} onUnsubscribe={() => handleUnsubscribe(m.id)} onResubscribe={() => handleResubscribe(m.id)} onClick={() => setSelectedMatchId(m.id)} dimmed />
+                        <MatchCard key={m.id} match={m} isUnsubscribed={settings.unsubscribedMatches.includes(m.id)} onUnsubscribe={() => handleUnsubscribe(m.id)} onResubscribe={() => handleResubscribe(m.id)} onClick={() => push({ type: 'match', matchId: m.id })} onTeamClick={handleTeamClick} onPlayerClick={handlePlayerClick} dimmed />
                       ))}
                     </>
                   )}
@@ -528,7 +578,9 @@ export default function App() {
                       isUnsubscribed={settings.unsubscribedMatches.includes(m.id)}
                       onUnsubscribe={() => handleUnsubscribe(m.id)}
                       onResubscribe={() => handleResubscribe(m.id)}
-                      onClick={() => setSelectedMatchId(m.id)}
+                      onClick={() => push({ type: 'match', matchId: m.id })}
+                      onTeamClick={handleTeamClick}
+                      onPlayerClick={handlePlayerClick}
                       dimmed={m.status === 'post'}
                     />
                   ))}
@@ -541,14 +593,14 @@ export default function App() {
           {/* STANDINGS */}
           {activeTab === 'standings' && (
             <div style={{ padding: `14px ${PAD}px 16px` }}>
-              <GroupStandings />
+              <GroupStandings onTeamClick={handleTeamClick} />
             </div>
           )}
 
           {/* BRACKET */}
           {activeTab === 'bracket' && (
             <div style={{ padding: `14px ${PAD}px 16px` }}>
-              <Bracket />
+              <Bracket onTeamClick={handleTeamClick} />
             </div>
           )}
 

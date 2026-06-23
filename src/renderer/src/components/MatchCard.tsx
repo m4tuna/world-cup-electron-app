@@ -8,6 +8,8 @@ interface Props {
   onUnsubscribe: () => void
   onResubscribe: () => void
   onClick?: () => void
+  onTeamClick?: (teamId: string, teamName: string, flagEmoji: string) => void
+  onPlayerClick?: (playerId: string, playerName: string, position: string, teamFlag: string, teamAbbr: string) => void
   dimmed?: boolean
 }
 
@@ -16,7 +18,11 @@ function formatMatchTime(dateStr: string) {
   return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })
 }
 
-function GoalList({ match, side }: { match: Match; side: 'home' | 'away' }) {
+function GoalList({ match, side, teamFlag, teamAbbr, onPlayerClick }: {
+  match: Match; side: 'home' | 'away'
+  teamFlag: string; teamAbbr: string
+  onPlayerClick?: (playerId: string, playerName: string, position: string, teamFlag: string, teamAbbr: string) => void
+}) {
   const teamId = side === 'home' ? match.homeTeam.id : match.awayTeam.id
   const goals = match.goalScorers.filter((g) => g.teamId === teamId)
   if (!goals.length) return null
@@ -28,7 +34,16 @@ function GoalList({ match, side }: { match: Match; side: 'home' | 'away' }) {
       alignItems: side === 'away' ? 'flex-end' : 'flex-start',
     }}>
       {goals.map((g, i) => (
-        <span key={i} style={{ fontSize: '11px', color: 'rgba(255,255,255,0.78)', lineHeight: 1.3 }}>
+        <span
+          key={i}
+          onClick={g.playerId && onPlayerClick ? (e) => { e.stopPropagation(); onPlayerClick(g.playerId!, g.playerName, 'F', teamFlag, teamAbbr) } : undefined}
+          style={{
+            fontSize: '11px', color: 'rgba(255,255,255,0.78)', lineHeight: 1.3,
+            cursor: g.playerId && onPlayerClick ? 'pointer' : 'default',
+            textDecoration: g.playerId && onPlayerClick ? 'underline' : 'none',
+            textDecorationColor: 'rgba(255,255,255,0.25)',
+          }}
+        >
           ⚽ {g.playerName} {g.clock}{g.isPenalty ? ' (P)' : g.isOwnGoal ? ' (OG)' : ''}
         </span>
       ))}
@@ -36,7 +51,7 @@ function GoalList({ match, side }: { match: Match; side: 'home' | 'away' }) {
   )
 }
 
-export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResubscribe, onClick, dimmed }: Props) {
+export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResubscribe, onClick, onTeamClick, onPlayerClick, dimmed }: Props) {
   const isLive = match.status === 'in'
   const isFinished = match.status === 'post'
   const homeWins = isFinished && match.homeScore > match.awayScore
@@ -127,18 +142,21 @@ export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResu
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
           {/* Home */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px', opacity: awayWins ? 0.55 : 1, transition: 'opacity 0.15s' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); onTeamClick?.(match.homeTeam.id, match.homeTeam.name, match.homeTeam.flagEmoji) }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', padding: 0, cursor: onTeamClick && match.homeTeam.id ? 'pointer' : 'default', textAlign: 'left', fontFamily: 'inherit' }}
+            >
               <span style={{ fontSize: '28px', lineHeight: 1 }}>{match.homeTeam.flagEmoji}</span>
               <div>
-                <p style={{ fontSize: '15px', fontWeight: 800, color: '#fff', lineHeight: 1, letterSpacing: '-0.01em' }}>
+                <p style={{ fontSize: '15px', fontWeight: 800, color: '#fff', lineHeight: 1, letterSpacing: '-0.01em', margin: 0 }}>
                   {match.homeTeam.abbreviation}
                 </p>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginTop: '2px' }}>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginTop: '2px', margin: '2px 0 0' }}>
                   {match.homeTeam.name}
                 </p>
               </div>
-            </div>
-            {(isLive || isFinished) && <GoalList match={match} side="home" />}
+            </button>
+            {(isLive || isFinished) && <GoalList match={match} side="home" teamFlag={match.homeTeam.flagEmoji} teamAbbr={match.homeTeam.abbreviation} onPlayerClick={onPlayerClick} />}
           </div>
 
           {/* Score */}
@@ -178,18 +196,21 @@ export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResu
 
           {/* Away */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', opacity: homeWins ? 0.55 : 1, transition: 'opacity 0.15s' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexDirection: 'row-reverse' }}>
+            <button
+              onClick={(e) => { e.stopPropagation(); onTeamClick?.(match.awayTeam.id, match.awayTeam.name, match.awayTeam.flagEmoji) }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', flexDirection: 'row-reverse', background: 'none', border: 'none', padding: 0, cursor: onTeamClick && match.awayTeam.id ? 'pointer' : 'default', fontFamily: 'inherit' }}
+            >
               <span style={{ fontSize: '28px', lineHeight: 1 }}>{match.awayTeam.flagEmoji}</span>
               <div style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: '15px', fontWeight: 800, color: '#fff', lineHeight: 1, letterSpacing: '-0.01em' }}>
+                <p style={{ fontSize: '15px', fontWeight: 800, color: '#fff', lineHeight: 1, letterSpacing: '-0.01em', margin: 0 }}>
                   {match.awayTeam.abbreviation}
                 </p>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginTop: '2px' }}>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginTop: '2px', margin: '2px 0 0' }}>
                   {match.awayTeam.name}
                 </p>
               </div>
-            </div>
-            {(isLive || isFinished) && <GoalList match={match} side="away" />}
+            </button>
+            {(isLive || isFinished) && <GoalList match={match} side="away" teamFlag={match.awayTeam.flagEmoji} teamAbbr={match.awayTeam.abbreviation} onPlayerClick={onPlayerClick} />}
           </div>
         </div>
 

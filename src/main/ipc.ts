@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow, shell } from 'electron'
-import { fetchUpcomingMatches, fetchMatchSummary, fetchStandings, fetchBracket, fetchMatchesWithGoals } from './api'
+import { fetchUpcomingMatches, fetchMatchSummary, fetchStandings, fetchBracket, fetchMatchesWithGoals, fetchTeamPage, fetchPlayerPage } from './api'
 import {
   getSettings, setNotificationMinutes, setSoundEnabled,
   unsubscribeMatch, resubscribeMatch, resetSubscriptions,
@@ -50,7 +50,8 @@ export function registerIpcHandlers(win: BrowserWindow) {
   ipcMain.handle('cast:get-devices', () => getDevices())
   ipcMain.handle('cast:refresh', (_, deviceId: string) => refreshStatus(deviceId))
   ipcMain.handle('cast:scan', () => scanNow())
-  ipcMain.handle('cast:open-spectrum', () => {
-    shell.openExternal('https://watch.spectrum.net')
-  })
+  ipcMain.handle('cast:open-spectrum', () => shell.openExternal('https://watch.spectrum.net'))
+  ipcMain.handle('open-url', (_, url: string) => shell.openExternal(url))
+  ipcMain.handle('get-team-page', async (_, teamId: string) => fetchTeamPage(teamId))
+  ipcMain.handle('get-player-page', async (_, playerId: string) => fetchPlayerPage(playerId))
 }

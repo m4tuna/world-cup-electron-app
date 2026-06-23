@@ -34,13 +34,30 @@ A macOS menu bar app for the 2026 FIFA World Cup (USA · Canada · Mexico). Live
 - **Amber highlight** — best 3rd-place bubble teams
 - **Dimmed** — eliminated teams
 - Sorted by points, then goal difference, then goals scored
+- **Click any team** to open that nation's team page
 - Powered by ESPN's official standings API
 
 ### Bracket Tab
 - Full knockout bracket (Round of 32 → Round of 16 → QF → SF → Final)
-- Round selector tabs at the top
+- Cinematic layout with gold-tinted Final column and animated World Cup Trophy SVG
 - Shows confirmed teams once the group stage concludes; slot labels (e.g. "Group A 2nd Place") before teams are determined
 - Live scores and winner highlighting during knockout matches
+- **Click any team** to open that nation's team page
+
+### Team Pages
+- Full squad roster grouped by position (GK → DEF → MID → FWD) with jersey numbers and photos
+- Coach and W-D-L record
+- **Click any player** to drill into their player page
+- Links through from match cards (flag/name), standings, bracket, and match detail lineups
+- "View full page on ESPN ↗" quick-link
+
+### Player Pages
+- Hero card with photo background, jersey number, name, position, and nation badge
+- Stat pills: age, height, weight, nationality
+- Date of birth and club affiliation
+- **Team badge is clickable** — navigates back to the team roster
+- "View full profile on ESPN ↗" quick-link
+- Reachable by clicking goal scorer names on match cards, or any player in a lineup or team roster
 
 ### Match Detail View
 - Click any match card or schedule row to drill in
@@ -163,7 +180,9 @@ src/
       MatchCard.tsx       Big card: photos, score, goals, channels, mute
       MatchDetail.tsx     Feed / Lineups / Stats drill-down
       GroupStandings.tsx  12-group standings tables
-      Bracket.tsx         Knockout bracket with round tabs
+      Bracket.tsx         Knockout bracket tree with Trophy SVG
+      TeamPage.tsx        Squad roster, coach, record
+      PlayerPage.tsx      Player bio, stats, club
       LiveBadge.tsx       Pulsing LIVE dot + clock
       UpcomingMatch.tsx   Compact schedule row
       ChannelBadge.tsx    TV broadcast pill

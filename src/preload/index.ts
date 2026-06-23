@@ -38,11 +38,15 @@ const api = {
   refreshCastDevice: (deviceId: string) => ipcRenderer.invoke('cast:refresh', deviceId),
   scanCastDevices: () => ipcRenderer.invoke('cast:scan'),
   resizePanel: (h: number) => ipcRenderer.send('panel:resize', h),
+  setPanelWidth: (w: number) => ipcRenderer.send('panel:set-width', w),
   getMatchSummary: (matchId: string) => ipcRenderer.invoke('get-match-summary', matchId),
   getStandings: () => ipcRenderer.invoke('get-standings'),
   getBracket: () => ipcRenderer.invoke('get-bracket'),
   getMatchesByDate: (dateStr: string) => ipcRenderer.invoke('get-matches-by-date', dateStr),
   openSpectrum: () => ipcRenderer.invoke('cast:open-spectrum'),
+  openUrl: (url: string) => ipcRenderer.invoke('open-url', url),
+  getTeamPage: (teamId: string) => ipcRenderer.invoke('get-team-page', teamId),
+  getPlayerPage: (playerId: string) => ipcRenderer.invoke('get-player-page', playerId),
   onCastDevices: (cb: (devices: unknown[]) => void) => {
     const handler = (_: unknown, devices: unknown[]) => cb(devices)
     ipcRenderer.on('cast:devices', handler)

@@ -9,6 +9,7 @@ import { startDiscovery, stopDiscovery } from './cast'
 
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
+let panelWidth = 500
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -52,7 +53,7 @@ export function showPanel() {
   const trayBounds = getTrayBounds()
   if (!trayBounds) { mainWindow.show(); mainWindow.focus(); return }
 
-  const { width: winW } = mainWindow.getBounds()
+  const winW = panelWidth
   const display = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y })
   const wa = display.workArea
 
@@ -84,8 +85,26 @@ ipcMain.on('panel:resize', (_, desiredH: number) => {
   const y = Math.round(trayBounds.y + trayBounds.height)
   const maxH = Math.round(wa.y + wa.height - y - 8)
   const h = Math.min(Math.max(Math.round(desiredH), 200), maxH)
-  const { width } = mainWindow.getBounds()
-  mainWindow.setSize(width, h, false)
+  mainWindow.setSize(panelWidth, h, false)
+})
+
+// Renderer requests a panel width change (e.g. bracket tab needs more room)
+ipcMain.on('panel:set-width', (_, desiredW: number) => {
+  if (!mainWindow) return
+  const trayBounds = getTrayBounds()
+  const { height, y } = mainWindow.getBounds()
+  const display = trayBounds
+    ? screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y })
+    : screen.getDisplayNearestPoint({ x: mainWindow.getBounds().x, y })
+  const wa = display.workArea
+  panelWidth = Math.min(Math.max(Math.round(desiredW), 400), Math.round(wa.width * 0.95))
+  mainWindow.setSize(panelWidth, height, false)
+  if (trayBounds) {
+    const cx = Math.round(trayBounds.x + trayBounds.width / 2)
+    const clampedX = Math.max(wa.x + 4, Math.min(Math.round(cx - panelWidth / 2), wa.x + wa.width - panelWidth - 4))
+    mainWindow.setPosition(clampedX, y, false)
+    mainWindow.webContents.send('panel:caret', cx - clampedX)
+  }
 })
 
 app.whenReady().then(() => {

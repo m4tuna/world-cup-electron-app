@@ -3,7 +3,9 @@ import type { StandingsGroup } from '../types'
 
 function fmtGD(gd: number) { return gd > 0 ? `+${gd}` : `${gd}` }
 
-export default function GroupStandings() {
+export default function GroupStandings({ onTeamClick }: {
+  onTeamClick?: (teamId: string, teamName: string, flagEmoji: string) => void
+}) {
   const [groups, setGroups] = useState<StandingsGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -90,7 +92,15 @@ export default function GroupStandings() {
                   }}
                 >
                   {/* Team */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0 }}>
+                  <button
+                    onClick={() => entry.teamId && onTeamClick?.(entry.teamId, entry.name ?? entry.abbreviation, entry.flagEmoji)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0,
+                      background: 'none', border: 'none', padding: 0,
+                      cursor: entry.teamId && onTeamClick ? 'pointer' : 'default',
+                      fontFamily: 'inherit', textAlign: 'left',
+                    }}
+                  >
                     <span style={{ fontSize: '13px', flexShrink: 0 }}>{entry.flagEmoji}</span>
                     <span style={{
                       fontSize: '11px',
@@ -102,7 +112,7 @@ export default function GroupStandings() {
                     }}>
                       {entry.abbreviation}
                     </span>
-                  </div>
+                  </button>
                   <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{entry.played}</span>
                   <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{entry.w}</span>
                   <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{entry.d}</span>
