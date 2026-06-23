@@ -86,6 +86,7 @@ export interface BracketMatchup {
   status: 'pre' | 'in' | 'post'
   home: BracketTeam
   away: BracketTeam
+  venue?: string
 }
 
 export interface BracketRound {

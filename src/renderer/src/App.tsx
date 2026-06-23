@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from 'react'
 import { useMatchStore } from './store/matchStore'
 import { useMatches } from './hooks/useMatches'
 import MatchCard from './components/MatchCard'
-import UpcomingMatch from './components/UpcomingMatch'
 import MatchDetail from './components/MatchDetail'
 import SettingsPanel from './components/SettingsPanel'
 import GroupStandings from './components/GroupStandings'
@@ -11,14 +10,15 @@ import SpectrumQR from './components/SpectrumQR'
 import CastPanel from './components/CastPanel'
 import type { Match, CastDevice } from './types'
 
-function groupByDay(matches: Match[]) {
-  const groups: Record<string, Match[]> = {}
-  for (const m of matches) {
-    const day = new Date(m.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
-    if (!groups[day]) groups[day] = []
-    groups[day].push(m)
-  }
-  return groups
+const TOURNAMENT_START = new Date('2026-06-11T00:00:00')
+const TOURNAMENT_END = new Date('2026-07-19T23:59:59')
+
+function isSameDay(a: Date, b: Date) {
+  return a.toDateString() === b.toDateString()
+}
+
+function fmtDateParam(d: Date): string {
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
 }
 
 type Tab = 'live' | 'schedule' | 'standings' | 'bracket'
@@ -39,6 +39,9 @@ export default function App() {
   const [matchesLoading, setMatchesLoading] = useState(true)
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [scheduleDate, setScheduleDate] = useState<Date>(() => new Date())
+  const [scheduleDayMatches, setScheduleDayMatches] = useState<Match[] | null>(null)
+  const [scheduleDayLoading, setScheduleDayLoading] = useState(false)
   const fixedRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -73,15 +76,26 @@ export default function App() {
     return () => { unsub(); clearInterval(poll) }
   }, [])
 
+  useEffect(() => {
+    if (isSameDay(scheduleDate, new Date())) {
+      setScheduleDayMatches(null)
+      setScheduleDayLoading(false)
+      return
+    }
+    setScheduleDayLoading(true)
+    setScheduleDayMatches(null)
+    window.api.getMatchesByDate(fmtDateParam(scheduleDate)).then((data) => {
+      setScheduleDayMatches(data as Match[])
+      setScheduleDayLoading(false)
+    }).catch(() => {
+      setScheduleDayMatches([])
+      setScheduleDayLoading(false)
+    })
+  }, [scheduleDate])
+
   const liveMatches = todayMatches.filter((m) => m.status === 'in')
   const todayPre = todayMatches.filter((m) => m.status === 'pre')
   const todayPost = todayMatches.filter((m) => m.status === 'post')
-  const futureMatches = upcomingMatches.filter((m) => {
-    const d = new Date(m.date)
-    const today = new Date()
-    return d.toDateString() !== today.toDateString() && m.status === 'pre'
-  })
-
   useEffect(() => {
     if (liveMatches.length > 0 && activeTab === 'schedule') setActiveTab('live')
   }, [liveMatches.length])
@@ -92,8 +106,13 @@ export default function App() {
   const handleSetSound = (e: boolean) => { window.api.setSoundEnabled(e); setSettings({ ...settings, soundEnabled: e }) }
   const handleResetSubs = () => { window.api.resetSubscriptions(); setSettings({ ...settings, unsubscribedMatches: [] }) }
 
-  const upcomingGrouped = groupByDay(futureMatches)
-  const selectedMatch = [...todayMatches, ...upcomingMatches].find((m) => m.id === selectedMatchId) ?? null
+  const isScheduleToday = isSameDay(scheduleDate, new Date())
+  const scheduleDisplayMatches = isScheduleToday
+    ? [...liveMatches, ...todayPre, ...todayPost]
+    : scheduleDayMatches ?? []
+  const scheduleIsLoading = isScheduleToday ? matchesLoading : scheduleDayLoading
+
+  const selectedMatch = [...todayMatches, ...upcomingMatches, ...(scheduleDayMatches ?? [])].find((m) => m.id === selectedMatchId) ?? null
 
   const castingDevice = castDevices.find((d) => d.status?.isPlaying) ?? null
   const isCasting = !!castingDevice
@@ -106,7 +125,7 @@ export default function App() {
 
   // Resize window: match detail fills available height; normal view fits content
   useEffect(() => {
-    if (selectedMatchId || showSettings || activeTab === 'standings' || activeTab === 'bracket') {
+    if (selectedMatchId || showSettings || activeTab === 'standings' || activeTab === 'bracket' || activeTab === 'schedule') {
       window.api.resizePanel?.(9999) // fill to screen height; content scrolls within
     } else {
       const fixedH = fixedRef.current?.offsetHeight ?? 0
@@ -304,18 +323,70 @@ export default function App() {
 
           {/* SCHEDULE */}
           {activeTab === 'schedule' && (
-            <div style={{ padding: `14px ${PAD}px 16px`, display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              {futureMatches.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '48px 0', color: 'rgba(255,255,255,0.22)', fontSize: '13px' }}>No upcoming matches</div>
+            <div style={{ padding: `14px ${PAD}px 16px`, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {/* Date navigation */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => setScheduleDate(prev => { const d = new Date(prev); d.setDate(d.getDate() - 1); return d })}
+                  disabled={isSameDay(scheduleDate, TOURNAMENT_START)}
+                  style={{
+                    flexShrink: 0, width: '32px', height: '32px', borderRadius: '9px',
+                    border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
+                    color: isSameDay(scheduleDate, TOURNAMENT_START) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
+                    fontSize: '18px', lineHeight: 1,
+                    cursor: isSameDay(scheduleDate, TOURNAMENT_START) ? 'default' : 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
+                  }}
+                >‹</button>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
+                    {isScheduleToday ? 'Today' : scheduleDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                  </span>
+                  {isScheduleToday ? (
+                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)' }}>
+                      {scheduleDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => setScheduleDate(new Date())}
+                      style={{ fontSize: '10px', color: 'rgba(74,222,128,0.7)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
+                    >← Today</button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setScheduleDate(prev => { const d = new Date(prev); d.setDate(d.getDate() + 1); return d })}
+                  disabled={isSameDay(scheduleDate, TOURNAMENT_END)}
+                  style={{
+                    flexShrink: 0, width: '32px', height: '32px', borderRadius: '9px',
+                    border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
+                    color: isSameDay(scheduleDate, TOURNAMENT_END) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
+                    fontSize: '18px', lineHeight: 1,
+                    cursor: isSameDay(scheduleDate, TOURNAMENT_END) ? 'default' : 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
+                  }}
+                >›</button>
+              </div>
+              <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)' }} />
+
+              {/* Matches for selected date */}
+              {scheduleIsLoading ? (
+                <div style={{ textAlign: 'center', padding: '48px 0', color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>Loading…</div>
+              ) : scheduleDisplayMatches.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '48px 0', color: 'rgba(255,255,255,0.22)', fontSize: '12px' }}>No matches on this date</div>
               ) : (
-                Object.entries(upcomingGrouped).map(([day, matches]) => (
-                  <div key={day} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <h3 style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.26)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0, paddingLeft: '2px' }}>{day}</h3>
-                    {matches.map((m) => (
-                      <UpcomingMatch key={m.id} match={m} isUnsubscribed={settings.unsubscribedMatches.includes(m.id)} onUnsubscribe={() => handleUnsubscribe(m.id)} onResubscribe={() => handleResubscribe(m.id)} onClick={() => setSelectedMatchId(m.id)} />
-                    ))}
-                  </div>
-                ))
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {scheduleDisplayMatches.map((m) => (
+                    <MatchCard
+                      key={m.id}
+                      match={m}
+                      isUnsubscribed={settings.unsubscribedMatches.includes(m.id)}
+                      onUnsubscribe={() => handleUnsubscribe(m.id)}
+                      onResubscribe={() => handleResubscribe(m.id)}
+                      onClick={() => setSelectedMatchId(m.id)}
+                      dimmed={m.status === 'post'}
+                    />
+                  ))}
+                </div>
               )}
               <SpectrumQR hidden={isCasting} />
             </div>

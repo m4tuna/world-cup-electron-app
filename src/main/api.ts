@@ -492,6 +492,7 @@ export interface BracketMatchup {
   status: 'pre' | 'in' | 'post'
   home: BracketTeam
   away: BracketTeam
+  venue?: string
 }
 
 export interface BracketRound {
@@ -547,12 +548,14 @@ export async function fetchBracket(): Promise<BracketRound[]> {
       const away = competitors.find((c) => (c as Record<string, unknown>).homeAway === 'away') as Record<string, unknown> | undefined
       const state = String(((comp.status as Record<string, unknown>)?.type as Record<string, unknown>)?.state ?? 'pre')
 
+      const venueStr = String((comp.venue as Record<string, unknown>)?.fullName ?? '')
       const matchup: BracketMatchup = {
         id: String(e.id ?? ''),
         date: String(e.date ?? ''),
         status: state === 'in' ? 'in' : state === 'post' ? 'post' : 'pre',
         home: parseBracketTeam(home, state),
         away: parseBracketTeam(away, state),
+        venue: venueStr || undefined,
       }
 
       if (!roundMap.has(slug)) roundMap.set(slug, [])

@@ -41,6 +41,7 @@ const api = {
   getMatchSummary: (matchId: string) => ipcRenderer.invoke('get-match-summary', matchId),
   getStandings: () => ipcRenderer.invoke('get-standings'),
   getBracket: () => ipcRenderer.invoke('get-bracket'),
+  getMatchesByDate: (dateStr: string) => ipcRenderer.invoke('get-matches-by-date', dateStr),
   openSpectrum: () => ipcRenderer.invoke('cast:open-spectrum'),
   onCastDevices: (cb: (devices: unknown[]) => void) => {
     const handler = (_: unknown, devices: unknown[]) => cb(devices)
