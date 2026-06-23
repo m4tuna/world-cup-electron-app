@@ -42,6 +42,10 @@ export default function App() {
   const [scheduleDate, setScheduleDate] = useState<Date>(() => new Date())
   const [scheduleDayMatches, setScheduleDayMatches] = useState<Match[] | null>(null)
   const [scheduleDayLoading, setScheduleDayLoading] = useState(false)
+  const [showCalendar, setShowCalendar] = useState(false)
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(2026, 5, 1))
+  const calendarRef = useRef<HTMLDivElement>(null)
+  const calendarBtnRef = useRef<HTMLButtonElement>(null)
   const fixedRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -93,6 +97,19 @@ export default function App() {
     })
   }, [scheduleDate])
 
+  useEffect(() => { setShowCalendar(false) }, [activeTab])
+
+  useEffect(() => {
+    if (!showCalendar) return
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (calendarBtnRef.current?.contains(t) || calendarRef.current?.contains(t)) return
+      setShowCalendar(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showCalendar])
+
   const liveMatches = todayMatches.filter((m) => m.status === 'in')
   const todayPre = todayMatches.filter((m) => m.status === 'pre')
   const todayPost = todayMatches.filter((m) => m.status === 'post')
@@ -117,6 +134,16 @@ export default function App() {
   const castingDevice = castDevices.find((d) => d.status?.isPlaying) ?? null
   const isCasting = !!castingDevice
   const castDeviceName = castingDevice?.name ?? null
+
+  // ── Calendar grid ─────────────────────────────────────────────
+  const calYear = calendarMonth.getFullYear()
+  const calMonthIdx = calendarMonth.getMonth()
+  const calFirstDow = new Date(calYear, calMonthIdx, 1).getDay()
+  const calDaysInMonth = new Date(calYear, calMonthIdx + 1, 0).getDate()
+  const calCells: (Date | null)[] = []
+  for (let i = 0; i < calFirstDow; i++) calCells.push(null)
+  for (let d = 1; d <= calDaysInMonth; d++) calCells.push(new Date(calYear, calMonthIdx, d))
+  const calToday = new Date()
 
   // ── Shared style constants ─────────────────────────────────────
   const PAD = 20
@@ -324,47 +351,166 @@ export default function App() {
           {/* SCHEDULE */}
           {activeTab === 'schedule' && (
             <div style={{ padding: `14px ${PAD}px 16px`, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {/* Date navigation */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  onClick={() => setScheduleDate(prev => { const d = new Date(prev); d.setDate(d.getDate() - 1); return d })}
-                  disabled={isSameDay(scheduleDate, TOURNAMENT_START)}
-                  style={{
-                    flexShrink: 0, width: '32px', height: '32px', borderRadius: '9px',
-                    border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
-                    color: isSameDay(scheduleDate, TOURNAMENT_START) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
-                    fontSize: '18px', lineHeight: 1,
-                    cursor: isSameDay(scheduleDate, TOURNAMENT_START) ? 'default' : 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
-                  }}
-                >‹</button>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
-                    {isScheduleToday ? 'Today' : scheduleDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-                  </span>
-                  {isScheduleToday ? (
-                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)' }}>
-                      {scheduleDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+              {/* Date navigation + calendar popover */}
+              <div style={{ position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button
+                    onClick={() => setScheduleDate(prev => { const d = new Date(prev); d.setDate(d.getDate() - 1); return d })}
+                    disabled={isSameDay(scheduleDate, TOURNAMENT_START)}
+                    style={{
+                      flexShrink: 0, width: '32px', height: '32px', borderRadius: '9px',
+                      border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
+                      color: isSameDay(scheduleDate, TOURNAMENT_START) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
+                      fontSize: '18px', lineHeight: 1,
+                      cursor: isSameDay(scheduleDate, TOURNAMENT_START) ? 'default' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
+                    }}
+                  >‹</button>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
+                      {isScheduleToday ? 'Today' : scheduleDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                     </span>
-                  ) : (
-                    <button
-                      onClick={() => setScheduleDate(new Date())}
-                      style={{ fontSize: '10px', color: 'rgba(74,222,128,0.7)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
-                    >← Today</button>
-                  )}
+                    {isScheduleToday ? (
+                      <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)' }}>
+                        {scheduleDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setScheduleDate(new Date())}
+                        style={{ fontSize: '10px', color: 'rgba(74,222,128,0.7)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit' }}
+                      >← Today</button>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setScheduleDate(prev => { const d = new Date(prev); d.setDate(d.getDate() + 1); return d })}
+                    disabled={isSameDay(scheduleDate, TOURNAMENT_END)}
+                    style={{
+                      flexShrink: 0, width: '32px', height: '32px', borderRadius: '9px',
+                      border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
+                      color: isSameDay(scheduleDate, TOURNAMENT_END) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
+                      fontSize: '18px', lineHeight: 1,
+                      cursor: isSameDay(scheduleDate, TOURNAMENT_END) ? 'default' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
+                    }}
+                  >›</button>
+                  {/* Calendar picker button */}
+                  <button
+                    ref={calendarBtnRef}
+                    onClick={() => {
+                      if (!showCalendar) setCalendarMonth(new Date(scheduleDate.getFullYear(), scheduleDate.getMonth(), 1))
+                      setShowCalendar(s => !s)
+                    }}
+                    title="Pick a date"
+                    style={{
+                      flexShrink: 0, width: '32px', height: '32px', borderRadius: '9px',
+                      border: showCalendar ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.1)',
+                      background: showCalendar ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)',
+                      color: showCalendar ? '#fff' : 'rgba(255,255,255,0.55)',
+                      cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                      <line x1="16" y1="2" x2="16" y2="6"/>
+                      <line x1="8" y1="2" x2="8" y2="6"/>
+                      <line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                  </button>
                 </div>
-                <button
-                  onClick={() => setScheduleDate(prev => { const d = new Date(prev); d.setDate(d.getDate() + 1); return d })}
-                  disabled={isSameDay(scheduleDate, TOURNAMENT_END)}
-                  style={{
-                    flexShrink: 0, width: '32px', height: '32px', borderRadius: '9px',
-                    border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
-                    color: isSameDay(scheduleDate, TOURNAMENT_END) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
-                    fontSize: '18px', lineHeight: 1,
-                    cursor: isSameDay(scheduleDate, TOURNAMENT_END) ? 'default' : 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
-                  }}
-                >›</button>
+
+                {/* Calendar popover */}
+                {showCalendar && (
+                  <div
+                    ref={calendarRef}
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 8px)',
+                      left: 0, right: 0,
+                      zIndex: 50,
+                      background: 'rgba(14, 16, 22, 0.99)',
+                      backdropFilter: 'blur(24px)',
+                      WebkitBackdropFilter: 'blur(24px)',
+                      border: '1px solid rgba(255,255,255,0.13)',
+                      borderRadius: '14px',
+                      padding: '14px',
+                      boxShadow: '0 16px 48px rgba(0,0,0,0.7)',
+                    }}
+                  >
+                    {/* Month navigation */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                      <button
+                        onClick={() => setCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+                        disabled={calMonthIdx === 5}
+                        style={{
+                          width: '26px', height: '26px', borderRadius: '7px',
+                          border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
+                          color: calMonthIdx === 5 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
+                          fontSize: '16px', cursor: calMonthIdx === 5 ? 'default' : 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
+                        }}
+                      >‹</button>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
+                        {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                      </span>
+                      <button
+                        onClick={() => setCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+                        disabled={calMonthIdx === 6}
+                        style={{
+                          width: '26px', height: '26px', borderRadius: '7px',
+                          border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
+                          color: calMonthIdx === 6 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
+                          fontSize: '16px', cursor: calMonthIdx === 6 ? 'default' : 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
+                        }}
+                      >›</button>
+                    </div>
+
+                    {/* Day-of-week headers */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '4px' }}>
+                      {['Su','Mo','Tu','We','Th','Fr','Sa'].map(day => (
+                        <div key={day} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.28)', paddingBottom: '4px', letterSpacing: '0.04em' }}>{day}</div>
+                      ))}
+                    </div>
+
+                    {/* Day cells */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
+                      {calCells.map((date, i) => {
+                        if (!date) return <div key={`e${i}`} />
+                        const sel = isSameDay(date, scheduleDate)
+                        const tod = isSameDay(date, calToday)
+                        const inT = date >= TOURNAMENT_START && date <= TOURNAMENT_END
+                        return (
+                          <button
+                            key={date.getDate()}
+                            onClick={() => { if (inT) { setScheduleDate(date); setShowCalendar(false) } }}
+                            style={{
+                              padding: '7px 2px',
+                              borderRadius: '7px',
+                              border: sel
+                                ? '1px solid rgba(74,222,128,0.5)'
+                                : tod ? '1px solid rgba(255,255,255,0.18)' : '1px solid transparent',
+                              background: sel
+                                ? 'rgba(74,222,128,0.14)'
+                                : tod ? 'rgba(255,255,255,0.06)' : 'transparent',
+                              color: !inT
+                                ? 'rgba(255,255,255,0.13)'
+                                : sel ? 'rgba(74,222,128,0.95)' : tod ? '#fff' : 'rgba(255,255,255,0.72)',
+                              fontSize: '11px',
+                              fontWeight: sel || tod ? 700 : 400,
+                              cursor: inT ? 'pointer' : 'default',
+                              textAlign: 'center',
+                              fontFamily: 'inherit',
+                              lineHeight: 1,
+                            }}
+                          >
+                            {date.getDate()}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
               <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)' }} />
 
