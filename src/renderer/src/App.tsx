@@ -106,8 +106,8 @@ export default function App() {
 
   // Resize window: match detail fills available height; normal view fits content
   useEffect(() => {
-    if (selectedMatchId) {
-      window.api.resizePanel?.(9999) // main process caps at screen height
+    if (selectedMatchId || showSettings || activeTab === 'standings' || activeTab === 'bracket') {
+      window.api.resizePanel?.(9999) // fill to screen height; content scrolls within
     } else {
       const fixedH = fixedRef.current?.offsetHeight ?? 0
       const contentH = scrollRef.current?.scrollHeight ?? 0

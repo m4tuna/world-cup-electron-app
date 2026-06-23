@@ -171,7 +171,7 @@ export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResu
             )}
             {isFinished && (homeWins || awayWins) && (
               <span style={{ fontSize: '9px', color: 'rgba(74,222,128,0.6)', fontWeight: 600, letterSpacing: '0.04em' }}>
-                {homeWins ? match.homeTeam.abbreviation : match.awayTeam.abbreviation} WIN
+                {homeWins ? match.homeTeam.name : match.awayTeam.name} WIN
               </span>
             )}
           </div>

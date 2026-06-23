@@ -35,6 +35,7 @@ export interface Team {
 }
 
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world'
+const ESPN_V2_BASE = 'https://site.api.espn.com/apis/v2/sports/soccer/fifa.world'
 const SPORTSDB_BASE = 'https://www.thesportsdb.com/api/v1/json/3'
 
 const FLAG_MAP: Record<string, string> = {
@@ -425,6 +426,7 @@ export interface StandingsEntry {
   ga: number
   gd: number
   pts: number
+  advanceStatus: 'advance' | 'bubble' | 'eliminated' | null
 }
 
 export interface StandingsGroup {
@@ -433,7 +435,7 @@ export interface StandingsGroup {
 }
 
 export async function fetchStandings(): Promise<StandingsGroup[]> {
-  const data = await fetchJSON(`${ESPN_BASE}/standings`) as Record<string, unknown>
+  const data = await fetchJSON(`${ESPN_V2_BASE}/standings`) as Record<string, unknown>
   const children = (data.children as unknown[]) ?? []
 
   const groups: StandingsGroup[] = []
@@ -446,6 +448,12 @@ export async function fetchStandings(): Promise<StandingsGroup[]> {
       const stats = (e.stats as Record<string, unknown>[]) ?? []
       const getStat = (name: string) => Number(stats.find((s) => s.name === name)?.value ?? 0)
       const abbr = String(team?.abbreviation ?? '')
+      const noteDesc = String((e.note as Record<string, unknown>)?.description ?? '').toLowerCase()
+      let advanceStatus: StandingsEntry['advanceStatus'] = null
+      if (noteDesc.includes('advance') || noteDesc.includes('round of')) advanceStatus = 'advance'
+      else if (noteDesc.includes('best') || noteDesc.includes('bubble')) advanceStatus = 'bubble'
+      else if (noteDesc.includes('eliminat')) advanceStatus = 'eliminated'
+
       return {
         teamId: String(team?.id ?? ''),
         name: String(team?.displayName ?? abbr),
@@ -459,8 +467,9 @@ export async function fetchStandings(): Promise<StandingsGroup[]> {
         ga: getStat('pointsAgainst'),
         gd: getStat('pointDifferential'),
         pts: getStat('points'),
+        advanceStatus,
       }
-    })
+    }).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf)
     if (entries.length > 0) groups.push({ name: String(group.name ?? ''), entries })
   }
   return groups
@@ -490,48 +499,69 @@ export interface BracketRound {
   matchups: BracketMatchup[]
 }
 
+const ROUND_ORDER = ['round-of-32', 'round-of-16', 'quarterfinals', 'semifinals', 'third-place-match', 'final']
+const ROUND_NAMES: Record<string, string> = {
+  'round-of-32': 'Round of 32',
+  'round-of-16': 'Round of 16',
+  'quarterfinals': 'Quarterfinals',
+  'semifinals': 'Semifinals',
+  'third-place-match': '3rd Place',
+  'final': 'Final',
+}
+
 export async function fetchBracket(): Promise<BracketRound[]> {
   try {
-    const data = await fetchJSON(`${ESPN_BASE}/bracket`) as Record<string, unknown>
-    const bracket = data.bracket as Record<string, unknown> | undefined
-    const rounds = (bracket?.rounds as unknown[]) ?? []
+    // Fetch all knockout rounds via scoreboard date range
+    const data = await fetchJSON(`${ESPN_BASE}/scoreboard?dates=20260628-20260719`) as Record<string, unknown>
+    const events = (data.events as unknown[]) ?? []
 
-    const parseBracketTeam = (t: Record<string, unknown> | undefined): BracketTeam => {
-      if (!t) return { id: '', name: 'TBD', abbreviation: 'TBD', flagEmoji: '🏳️' }
-      const team = t.team as Record<string, unknown> | undefined
+    const parseBracketTeam = (c: Record<string, unknown> | undefined, state: string): BracketTeam => {
+      if (!c) return { id: '', name: 'TBD', abbreviation: 'TBD', flagEmoji: '🏳️' }
+      const team = c.team as Record<string, unknown> | undefined
       const abbr = String(team?.abbreviation ?? '')
-      const scoreStr = String(t.score ?? '')
+      const displayName = String(team?.displayName ?? abbr)
+      // Real teams have short abbreviations (ARG, FRA). Slots have placeholders like "2A", "1C".
+      const isRealTeam = /^[A-Z]{2,3}$/.test(abbr)
       return {
         id: String(team?.id ?? ''),
-        name: String(team?.displayName ?? abbr),
+        name: displayName,
         abbreviation: abbr || 'TBD',
-        flagEmoji: abbr ? flagEmoji(abbr) : '🏳️',
-        score: scoreStr !== '' && scoreStr !== 'undefined' ? parseInt(scoreStr) || 0 : undefined,
-        winner: Boolean(t.winner),
+        flagEmoji: isRealTeam ? flagEmoji(abbr) : '🏳️',
+        score: state !== 'pre' ? parseInt(String(c.score ?? '0')) || 0 : undefined,
+        winner: Boolean(c.winner),
       }
     }
 
-    return rounds.map((r) => {
-      const round = r as Record<string, unknown>
-      const competitions = (round.competitions as unknown[]) ?? []
-      return {
-        name: String(round.displayName ?? round.name ?? ''),
-        matchups: competitions.map((c) => {
-          const comp = c as Record<string, unknown>
-          const competitors = (comp.competitors as unknown[]) ?? []
-          const home = competitors.find((x) => (x as Record<string, unknown>).homeAway === 'home') as Record<string, unknown> | undefined
-          const away = competitors.find((x) => (x as Record<string, unknown>).homeAway === 'away') as Record<string, unknown> | undefined
-          const state = String(((comp.status as Record<string, unknown>)?.type as Record<string, unknown>)?.state ?? 'pre')
-          return {
-            id: String(comp.id ?? ''),
-            date: String(comp.date ?? ''),
-            status: state === 'in' ? 'in' : state === 'post' ? 'post' : 'pre',
-            home: parseBracketTeam(home),
-            away: parseBracketTeam(away),
-          }
-        })
+    const roundMap = new Map<string, BracketMatchup[]>()
+
+    for (const event of events) {
+      const e = event as Record<string, unknown>
+      const slug = String((e.season as Record<string, unknown>)?.slug ?? '')
+      if (!slug || !ROUND_ORDER.includes(slug)) continue
+
+      const comp = ((e.competitions as unknown[])?.[0]) as Record<string, unknown> | undefined
+      if (!comp) continue
+
+      const competitors = (comp.competitors as unknown[]) ?? []
+      const home = competitors.find((c) => (c as Record<string, unknown>).homeAway === 'home') as Record<string, unknown> | undefined
+      const away = competitors.find((c) => (c as Record<string, unknown>).homeAway === 'away') as Record<string, unknown> | undefined
+      const state = String(((comp.status as Record<string, unknown>)?.type as Record<string, unknown>)?.state ?? 'pre')
+
+      const matchup: BracketMatchup = {
+        id: String(e.id ?? ''),
+        date: String(e.date ?? ''),
+        status: state === 'in' ? 'in' : state === 'post' ? 'post' : 'pre',
+        home: parseBracketTeam(home, state),
+        away: parseBracketTeam(away, state),
       }
-    }).filter((r) => r.matchups.length > 0)
+
+      if (!roundMap.has(slug)) roundMap.set(slug, [])
+      roundMap.get(slug)!.push(matchup)
+    }
+
+    return ROUND_ORDER
+      .filter((slug) => roundMap.has(slug))
+      .map((slug) => ({ name: ROUND_NAMES[slug], matchups: roundMap.get(slug)! }))
   } catch {
     return []
   }

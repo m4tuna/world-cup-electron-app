@@ -7,11 +7,16 @@ function formatDate(dateStr: string) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+function isSlot(abbr: string) {
+  // Slot abbreviations are like "2A", "1C", "3RD", "TBD" — not real team codes
+  return !abbr || abbr === 'TBD' || /^\d/.test(abbr) || abbr === '3RD'
+}
+
 function BracketMatch({ m }: { m: BracketMatchup }) {
   const isPost = m.status === 'post'
   const isLive = m.status === 'in'
-  const homeTBD = m.home.abbreviation === 'TBD' || !m.home.abbreviation
-  const awayTBD = m.away.abbreviation === 'TBD' || !m.away.abbreviation
+  const homeTBD = isSlot(m.home.abbreviation)
+  const awayTBD = isSlot(m.away.abbreviation)
 
   return (
     <div style={{
@@ -39,10 +44,9 @@ function BracketMatch({ m }: { m: BracketMatchup }) {
       )}
 
       {/* Teams */}
-      {([{ team: m.home, isHome: true }, { team: m.away, isHome: false }] as const).map(({ team }) => {
+      {[{ team: m.home, slot: homeTBD }, { team: m.away, slot: awayTBD }].map(({ team, slot }) => {
         const isWinner = isPost && team.winner
         const isLoser = isPost && !team.winner
-        const isTBD = team.abbreviation === 'TBD' || !team.abbreviation
         return (
           <div
             key={team.id || team.abbreviation}
@@ -54,17 +58,18 @@ function BracketMatch({ m }: { m: BracketMatchup }) {
               borderBottom: '1px solid rgba(255,255,255,0.04)',
             }}
           >
-            <span style={{ fontSize: '14px', opacity: isTBD ? 0.3 : 1 }}>{team.flagEmoji}</span>
+            <span style={{ fontSize: '14px', opacity: slot ? 0.35 : 1 }}>{team.flagEmoji}</span>
             <span style={{
               flex: 1,
-              fontSize: '11px',
+              fontSize: slot ? '10px' : '11px',
               fontWeight: isWinner ? 700 : 500,
-              color: isTBD
-                ? 'rgba(255,255,255,0.25)'
+              color: slot
+                ? 'rgba(255,255,255,0.35)'
                 : isWinner ? '#fff' : isLoser ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.85)',
-              fontStyle: isTBD ? 'italic' : 'normal',
+              fontStyle: slot ? 'italic' : 'normal',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
-              {isTBD ? 'TBD' : team.abbreviation}
+              {slot ? team.name : team.abbreviation}
             </span>
             {isPost && team.score !== undefined && (
               <span style={{

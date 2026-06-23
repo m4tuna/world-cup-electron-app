@@ -63,6 +63,7 @@ export interface StandingsEntry {
   ga: number
   gd: number
   pts: number
+  advanceStatus: 'advance' | 'bubble' | 'eliminated' | null
 }
 
 export interface StandingsGroup {

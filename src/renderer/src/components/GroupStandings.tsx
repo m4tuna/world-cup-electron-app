@@ -66,9 +66,10 @@ export default function GroupStandings() {
 
           {/* Entries */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-            {group.entries.map((entry, idx) => {
-              const isQualified = idx < 2
-              const isBubble = idx === 2
+            {group.entries.map((entry) => {
+              const isQualified = entry.advanceStatus === 'advance'
+              const isBubble = entry.advanceStatus === 'bubble'
+              const isEliminated = entry.advanceStatus === 'eliminated'
               return (
                 <div
                   key={entry.teamId || entry.abbreviation}
@@ -84,6 +85,7 @@ export default function GroupStandings() {
                     borderLeft: isQualified
                       ? '2px solid rgba(74,222,128,0.35)'
                       : isBubble ? '2px solid rgba(251,191,36,0.3)' : '2px solid transparent',
+                    opacity: isEliminated ? 0.5 : 1,
                     alignItems: 'center',
                   }}
                 >
@@ -93,7 +95,7 @@ export default function GroupStandings() {
                     <span style={{
                       fontSize: '11px',
                       fontWeight: isQualified ? 700 : 500,
-                      color: isQualified ? '#fff' : 'rgba(255,255,255,0.75)',
+                      color: isQualified ? '#fff' : isBubble ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.6)',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -123,7 +125,10 @@ export default function GroupStandings() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: 'rgba(251,191,36,0.3)' }} />
-          <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.35)' }}>Bubble</span>
+          <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.35)' }}>Bubble (best 8 3rd)</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.2)' }}>· Eliminated at 50% opacity</span>
         </div>
       </div>
     </div>
