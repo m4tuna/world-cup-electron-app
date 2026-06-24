@@ -9,6 +9,14 @@ export interface GoalScorer {
   isOwnGoal: boolean
 }
 
+export interface MatchOddsInline {
+  homeMoneyLine: number
+  awayMoneyLine: number
+  drawMoneyLine: number
+  overUnder: number
+  homeIsFavorite: boolean
+}
+
 export interface Match {
   id: string
   status: 'pre' | 'in' | 'post'
@@ -23,6 +31,7 @@ export interface Match {
   venue: string
   city: string
   goalScorers: GoalScorer[]
+  odds?: MatchOddsInline
 }
 
 export interface Team {
@@ -38,6 +47,13 @@ export interface Team {
 const ESPN_BASE = 'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world'
 const ESPN_V2_BASE = 'https://site.api.espn.com/apis/v2/sports/soccer/fifa.world'
 const SPORTSDB_BASE = 'https://www.thesportsdb.com/api/v1/json/3'
+
+function espnBase(sport: string, league: string) {
+  return `https://site.api.espn.com/apis/site/v2/sports/${sport}/${league}`
+}
+function espnV2Base(sport: string, league: string) {
+  return `https://site.api.espn.com/apis/v2/sports/${sport}/${league}`
+}
 
 const FLAG_MAP: Record<string, string> = {
   ARG: '🇦🇷', BRA: '🇧🇷', FRA: '🇫🇷', GER: '🇩🇪', ENG: '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
@@ -55,11 +71,13 @@ const FLAG_MAP: Record<string, string> = {
   KWT: '🇰🇼', EGY: '🇪🇬', ALG: '🇩🇿', MLI: '🇲🇱', CIV: '🇨🇮',
   COD: '🇨🇩', ANG: '🇦🇴', NOR: '🇳🇴', SWE: '🇸🇪', FIN: '🇫🇮',
   ISL: '🇮🇸', IRL: '🇮🇪', SCO: '🏴󠁧󠁢󠁳󠁣󠁴󠁿', WAL: '🏴󠁧󠁢󠁷󠁬󠁳󠁿',
+  UZB: '🇺🇿',
 }
 
 const STAR_PLAYER_MAP: Record<string, string> = {
+  // Heavyweights
   ARG: 'Lionel Messi',
-  FRA: 'Kylian Mbappé',
+  FRA: 'Kylian Mbappe',
   BRA: 'Vinicius Junior',
   POR: 'Cristiano Ronaldo',
   ENG: 'Jude Bellingham',
@@ -68,20 +86,60 @@ const STAR_PLAYER_MAP: Record<string, string> = {
   NED: 'Virgil van Dijk',
   BEL: 'Kevin De Bruyne',
   URU: 'Federico Valverde',
+  CRO: 'Luka Modric',
+  // CONCACAF
   USA: 'Christian Pulisic',
-  MEX: 'Santiago Giménez',
+  MEX: 'Santiago Gimenez',
   CAN: 'Alphonso Davies',
+  PAN: 'Adalberto Carrasquilla',
+  CRC: 'Joel Campbell',
+  HON: 'Romell Quioto',
+  JAM: 'Leon Bailey',
+  // South America
+  COL: 'James Rodriguez',
+  ECU: 'Moises Caicedo',
+  // Africa
+  MAR: 'Achraf Hakimi',
+  SEN: 'Sadio Mane',
+  NGA: 'Victor Osimhen',
+  GHA: 'Mohammed Kudus',
+  CMR: 'Andre Onana',
+  EGY: 'Mohamed Salah',
+  ALG: 'Riyad Mahrez',
+  CIV: 'Franck Kessie',
+  MLI: 'Yves Bissouma',
+  TUN: 'Wahbi Khazri',
+  // Asia / Oceania
   JPN: 'Takefusa Kubo',
   JAP: 'Takefusa Kubo',
   KOR: 'Son Heung-min',
-  MAR: 'Achraf Hakimi',
-  SEN: 'Sadio Mané',
-  CRO: 'Luka Modric',
-  COL: 'James Rodríguez',
-  ECU: 'Moisés Caicedo',
-  NOR: 'Erling Haaland',
-  AUT: 'Marcel Sabitzer',
+  AUS: 'Harry Souttar',
+  NZL: 'Chris Wood',
+  QAT: 'Akram Afif',
   IRQ: 'Aymen Hussein',
+  JOR: 'Musa Al-Taamari',
+  SAU: 'Salem Al-Dawsari',
+  // Europe
+  NOR: 'Erling Haaland',
+  POL: 'Robert Lewandowski',
+  SUI: 'Granit Xhaka',
+  DEN: 'Christian Eriksen',
+  SWE: 'Viktor Gyokeres',
+  AUT: 'David Alaba',
+  HUN: 'Dominik Szoboszlai',
+  SRB: 'Dusan Vlahovic',
+  CZE: 'Patrik Schick',
+  SVN: 'Jan Oblak',
+  SVK: 'Milan Skriniar',
+  ROU: 'Razvan Marin',
+  UKR: 'Mykhailo Mudryk',
+  TUR: 'Hakan Calhanoglu',
+  GRE: 'Kostas Tsimikas',
+  SCO: 'Scott McTominay',
+  WAL: 'Brennan Johnson',
+  ISL: 'Albert Gudmundsson',
+  IRL: 'Evan Ferguson',
+  UZB: 'Eldor Shomurodov',
 }
 
 async function fetchJSON(url: string): Promise<unknown> {
@@ -117,9 +175,10 @@ function parseCompetitor(c: Record<string, unknown>): Team {
   }
 }
 
-async function fetchGoalScorers(eventId: string): Promise<GoalScorer[]> {
+async function fetchGoalScorers(eventId: string, sport = 'soccer', league = 'fifa.world'): Promise<GoalScorer[]> {
   try {
-    const data = await fetchJSON(`${ESPN_BASE}/summary?event=${eventId}`) as Record<string, unknown>
+    const base = sport === 'soccer' ? espnBase(sport, league) : ESPN_BASE
+    const data = await fetchJSON(`${base}/summary?event=${eventId}`) as Record<string, unknown>
     const header = data.header as Record<string, unknown> | undefined
     const comps = (header?.competitions as unknown[])?.[0] as Record<string, unknown> | undefined
     const details = (comps?.details as unknown[]) ?? []
@@ -147,10 +206,11 @@ async function fetchGoalScorers(eventId: string): Promise<GoalScorer[]> {
   }
 }
 
-export async function fetchMatches(dateStr?: string): Promise<Match[]> {
+export async function fetchMatches(dateStr?: string, sport = 'soccer', league = 'fifa.world'): Promise<Match[]> {
+  const base = espnBase(sport, league)
   const url = dateStr
-    ? `${ESPN_BASE}/scoreboard?dates=${dateStr}`
-    : `${ESPN_BASE}/scoreboard`
+    ? `${base}/scoreboard?dates=${dateStr}`
+    : `${base}/scoreboard`
 
   const data = await fetchJSON(url) as Record<string, unknown>
   const events = (data.events as unknown[]) ?? []
@@ -172,6 +232,28 @@ export async function fetchMatches(dateStr?: string): Promise<Match[]> {
     const rawStatus = String(statusType.state ?? 'pre')
     const status: Match['status'] = rawStatus === 'in' ? 'in' : rawStatus === 'post' ? 'post' : 'pre'
 
+    const oddsArr = (comps?.odds as unknown[]) ?? []
+    let odds: MatchOddsInline | undefined
+    const oddsObj = oddsArr.find((x) => x !== null) as Record<string, unknown> | undefined
+    if (oddsObj) {
+      const o = oddsObj
+      const homeOdds = o.homeTeamOdds as Record<string, unknown> | undefined
+      const awayOdds = o.awayTeamOdds as Record<string, unknown> | undefined
+      const drawOdds = o.drawOdds as Record<string, unknown> | undefined
+      const homeML = Number(homeOdds?.moneyLine ?? 0)
+      const awayML = Number(awayOdds?.moneyLine ?? 0)
+      const drawML = Number(drawOdds?.moneyLine ?? 0)
+      if (homeML || awayML || drawML) {
+        odds = {
+          homeMoneyLine: homeML,
+          awayMoneyLine: awayML,
+          drawMoneyLine: drawML,
+          overUnder: Number(o.overUnder ?? 0),
+          homeIsFavorite: Boolean(homeOdds?.favorite),
+        }
+      }
+    }
+
     return {
       id: String(e.id ?? ''),
       status,
@@ -186,25 +268,27 @@ export async function fetchMatches(dateStr?: string): Promise<Match[]> {
       venue: String((comps?.venue as Record<string, unknown>)?.fullName ?? ''),
       city: String(((comps?.venue as Record<string, unknown>)?.address as Record<string, unknown>)?.city ?? ''),
       goalScorers: [],
+      odds,
     } satisfies Match
   })
 }
 
-export async function fetchMatchesWithGoals(dateStr?: string): Promise<Match[]> {
-  const matches = await fetchMatches(dateStr)
+export async function fetchMatchesWithGoals(dateStr?: string, sport = 'soccer', league = 'fifa.world'): Promise<Match[]> {
+  const matches = await fetchMatches(dateStr, sport, league)
 
-  // Fetch goal scorers for finished/live matches
+  if (sport !== 'soccer') return matches
+
   const withGoals = await Promise.all(
     matches.map(async (m) => {
       if (m.status === 'pre') return m
-      const goals = await fetchGoalScorers(m.id)
+      const goals = await fetchGoalScorers(m.id, sport, league)
       return { ...m, goalScorers: goals }
     })
   )
   return withGoals
 }
 
-export async function fetchUpcomingMatches(days = 7): Promise<Match[]> {
+export async function fetchUpcomingMatches(days = 7, sport = 'soccer', league = 'fifa.world'): Promise<Match[]> {
   const results: Match[] = []
   const today = new Date()
   for (let i = 0; i < days; i++) {
@@ -212,7 +296,7 @@ export async function fetchUpcomingMatches(days = 7): Promise<Match[]> {
     d.setDate(today.getDate() + i)
     const dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
     try {
-      const matches = await fetchMatches(dateStr)
+      const matches = await fetchMatches(dateStr, sport, league)
       results.push(...matches)
     } catch {
       // skip failed date
@@ -445,8 +529,8 @@ export interface StandingsGroup {
   entries: StandingsEntry[]
 }
 
-export async function fetchStandings(): Promise<StandingsGroup[]> {
-  const data = await fetchJSON(`${ESPN_V2_BASE}/standings`) as Record<string, unknown>
+export async function fetchStandings(sport = 'soccer', league = 'fifa.world'): Promise<StandingsGroup[]> {
+  const data = await fetchJSON(`${espnV2Base(sport, league)}/standings`) as Record<string, unknown>
   const children = (data.children as unknown[]) ?? []
 
   const groups: StandingsGroup[] = []
@@ -653,6 +737,16 @@ export async function fetchTeamPage(teamId: string): Promise<TeamPageData> {
 
 // ── Player page ───────────────────────────────────────────────────────
 
+export interface PlayerTournamentStats {
+  appearances: number
+  goals: number
+  keyPasses: number
+  shots: number
+  passPct: string
+  yellowCards: number
+  redCards: number
+}
+
 export interface PlayerPageData {
   id: string
   name: string
@@ -668,6 +762,7 @@ export interface PlayerPageData {
   teamName?: string
   teamAbbr?: string
   teamId?: string
+  tournamentStats?: PlayerTournamentStats
 }
 
 export async function fetchPlayerPage(playerId: string): Promise<PlayerPageData> {
@@ -704,6 +799,38 @@ export async function fetchPlayerPage(playerId: string): Promise<PlayerPageData>
       teamId = String(teamRef.id ?? '')
     }
 
+    // World Cup tournament stats
+    let tournamentStats: PlayerTournamentStats | undefined
+    try {
+      const sData = await fetchJSON(
+        `https://sports.core.api.espn.com/v2/sports/soccer/leagues/fifa.world/seasons/2026/athletes/${playerId}/statistics?lang=en&region=us`
+      ) as Record<string, unknown>
+      const cats = ((sData.splits as Record<string, unknown>)?.categories as unknown[]) ?? []
+      // prefer `value` (raw number) over `displayValue` (pre-formatted string)
+      const getStat = (catName: string, statName: string): number => {
+        const cat = (cats as Record<string, unknown>[]).find((c) => c.name === catName)
+        const stat = ((cat?.stats as unknown[]) ?? []) as Record<string, unknown>[]
+        const found = stat.find((s) => s.name === statName)
+        return Number(found?.value ?? found?.displayValue ?? 0) || 0
+      }
+      const apps = getStat('general', 'appearances')
+      if (apps > 0) {
+        const attemptsIn = getStat('offensive', 'attemptsInBox')
+        const attemptsOut = getStat('offensive', 'attemptsOutBox')
+        const passPctRaw = getStat('general', 'passPct')
+        tournamentStats = {
+          appearances: apps,
+          goals: getStat('offensive', 'totalGoals'),
+          keyPasses: getStat('offensive', 'shotAssists'),
+          shots: attemptsIn + attemptsOut,
+          // passPct is a 0–1 decimal in `value`; multiply to get display percentage
+          passPct: passPctRaw > 0 ? `${Math.round(passPctRaw * 100)}%` : '',
+          yellowCards: getStat('general', 'yellowCards'),
+          redCards: getStat('general', 'redCards'),
+        }
+      }
+    } catch { /* stats optional */ }
+
     return {
       id: playerId,
       name: String(data.displayName ?? data.fullName ?? ''),
@@ -719,14 +846,133 @@ export async function fetchPlayerPage(playerId: string): Promise<PlayerPageData>
       teamName: teamName || undefined,
       teamAbbr: teamAbbr || undefined,
       teamId: teamId || undefined,
+      tournamentStats,
     }
   } catch {
     return { id: playerId, name: 'Unknown Player', shortName: '', position: '', jersey: '', nationality: '' }
   }
 }
 
+// ── Leaders ───────────────────────────────────────────────────────────
+
+export interface PlayerLeader {
+  playerId: string
+  name: string
+  shortName: string
+  nationality: string
+  flagEmoji: string
+  photoUrl?: string
+  goals: number
+  assists: number
+  shotsOnTarget: number
+  yellowCards: number
+  redCards: number
+  foulsCommitted: number
+}
+
+const leaderCache = new Map<string, { data: PlayerLeader[]; ts: number }>()
+const LEADER_TTL = 5 * 60 * 1000
+const CORE_BASE = 'https://sports.core.api.espn.com/v2/sports/soccer/leagues/fifa.world'
+
+export async function fetchLeaders(season = 2026): Promise<PlayerLeader[]> {
+  const key = String(season)
+  const cached = leaderCache.get(key)
+  if (cached && Date.now() - cached.ts < LEADER_TTL) return cached.data
+
+  const data = await fetchJSON(
+    `${CORE_BASE}/seasons/${season}/types/1/leaders?lang=en&region=us`
+  ) as Record<string, unknown>
+
+  const categories = (data.categories as Record<string, unknown>[]) ?? []
+
+  const statFields: Record<string, string> = {
+    goals: 'goals',
+    assists: 'assists',
+    shotsOnTarget: 'shotsOnTarget',
+    yellowCards: 'yellowCards',
+    redCards: 'redCards',
+    foulsCommitted: 'foulsCommitted',
+  }
+
+  const playerStats = new Map<string, {
+    goals: number; assists: number; shotsOnTarget: number;
+    yellowCards: number; redCards: number; foulsCommitted: number
+  }>()
+
+  for (const cat of categories) {
+    const field = statFields[String(cat.name ?? '')]
+    if (!field) continue
+    for (const leader of (cat.leaders as Record<string, unknown>[]) ?? []) {
+      const ref = String((leader.athlete as Record<string, unknown>)?.$ref ?? '')
+      const id = ref.match(/athletes\/(\d+)/)?.[1]
+      if (!id) continue
+      if (!playerStats.has(id)) {
+        playerStats.set(id, { goals: 0, assists: 0, shotsOnTarget: 0, yellowCards: 0, redCards: 0, foulsCommitted: 0 })
+      }
+      ;(playerStats.get(id)! as Record<string, number>)[field] = Number(leader.value ?? 0)
+    }
+  }
+
+  const ids = Array.from(playerStats.keys())
+  const athleteResults = await Promise.allSettled(
+    ids.map(id => fetchJSON(`${CORE_BASE}/seasons/${season}/athletes/${id}?lang=en&region=us`))
+  )
+
+  const players: PlayerLeader[] = []
+  for (let i = 0; i < ids.length; i++) {
+    const res = athleteResults[i]
+    if (res.status !== 'fulfilled') continue
+    const a = res.value as Record<string, unknown>
+    const id = ids[i]
+    const stats = playerStats.get(id)!
+    const flagHref = String((a.flag as Record<string, unknown>)?.href ?? '')
+    const countryCode = flagHref.match(/countries\/\d+\/([a-z]+)\.png/i)?.[1]?.toUpperCase() ?? ''
+    players.push({
+      playerId: id,
+      name: String(a.displayName ?? a.fullName ?? ''),
+      shortName: String(a.shortName ?? a.displayName ?? ''),
+      nationality: String(a.displayCountry ?? a.citizenship ?? a.nationality ?? ''),
+      flagEmoji: flagEmoji(countryCode),
+      photoUrl: `https://a.espncdn.com/i/headshots/soccer/players/full/${id}.png`,
+      ...stats,
+    })
+  }
+
+  players.sort((a, b) => b.goals - a.goals || b.assists - a.assists)
+  leaderCache.set(key, { data: players, ts: Date.now() })
+  return players
+}
+
 // ────────────────────────────────────────────────────────────────────
 const playerPhotoCache = new Map<string, string>()
+
+export interface TeamInfo {
+  id: string
+  abbreviation: string
+  name: string
+  logo?: string
+}
+
+export async function fetchTeams(sport: string, league: string): Promise<TeamInfo[]> {
+  try {
+    const data = await fetchJSON(`${espnBase(sport, league)}/teams?limit=100`) as Record<string, unknown>
+    const sports = (data.sports as Record<string, unknown>[]) ?? []
+    const leagues = (sports[0]?.leagues as Record<string, unknown>[]) ?? []
+    const teams = (leagues[0]?.teams as Record<string, unknown>[]) ?? []
+    return teams.map((t) => {
+      const team = t.team as Record<string, unknown>
+      const logos = (team.logos as Record<string, unknown>[]) ?? []
+      return {
+        id: String(team.id ?? ''),
+        abbreviation: String(team.abbreviation ?? ''),
+        name: String(team.displayName ?? ''),
+        logo: logos[0]?.href as string | undefined,
+      }
+    }).sort((a, b) => a.name.localeCompare(b.name))
+  } catch {
+    return []
+  }
+}
 
 export async function fetchPlayerPhoto(playerName: string): Promise<string | null> {
   if (playerPhotoCache.has(playerName)) return playerPhotoCache.get(playerName)!

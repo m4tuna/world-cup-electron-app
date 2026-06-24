@@ -3,8 +3,9 @@ import type { StandingsGroup } from '../types'
 
 function fmtGD(gd: number) { return gd > 0 ? `+${gd}` : `${gd}` }
 
-export default function GroupStandings({ onTeamClick }: {
+export default function GroupStandings({ onTeamClick, favoriteTeams }: {
   onTeamClick?: (teamId: string, teamName: string, flagEmoji: string) => void
+  favoriteTeams?: string[]
 }) {
   const [groups, setGroups] = useState<StandingsGroup[]>([])
   const [loading, setLoading] = useState(true)
@@ -72,6 +73,7 @@ export default function GroupStandings({ onTeamClick }: {
               const isQualified = entry.advanceStatus === 'advance'
               const isBubble = entry.advanceStatus === 'bubble'
               const isEliminated = entry.advanceStatus === 'eliminated'
+              const isFav = !!favoriteTeams?.length && favoriteTeams.includes(entry.abbreviation)
               return (
                 <div
                   key={entry.teamId || entry.abbreviation}
@@ -81,14 +83,19 @@ export default function GroupStandings({ onTeamClick }: {
                     gap: '0 4px',
                     padding: '5px 6px',
                     borderRadius: '7px',
-                    background: isQualified
-                      ? 'rgba(74,222,128,0.05)'
-                      : isBubble ? 'rgba(251,191,36,0.04)' : 'transparent',
-                    borderLeft: isQualified
-                      ? '2px solid rgba(74,222,128,0.35)'
-                      : isBubble ? '2px solid rgba(251,191,36,0.3)' : '2px solid transparent',
+                    background: isFav
+                      ? 'rgba(251,191,36,0.07)'
+                      : isQualified
+                        ? 'rgba(74,222,128,0.05)'
+                        : isBubble ? 'rgba(251,191,36,0.04)' : 'transparent',
+                    borderLeft: isFav
+                      ? '2px solid rgba(251,191,36,0.5)'
+                      : isQualified
+                        ? '2px solid rgba(74,222,128,0.35)'
+                        : isBubble ? '2px solid rgba(251,191,36,0.3)' : '2px solid transparent',
                     opacity: isEliminated ? 0.5 : 1,
                     alignItems: 'center',
+                    outline: isFav ? '1px solid rgba(251,191,36,0.15)' : 'none',
                   }}
                 >
                   {/* Team */}
@@ -104,8 +111,8 @@ export default function GroupStandings({ onTeamClick }: {
                     <span style={{ fontSize: '13px', flexShrink: 0 }}>{entry.flagEmoji}</span>
                     <span style={{
                       fontSize: '11px',
-                      fontWeight: isQualified ? 700 : 500,
-                      color: isQualified ? '#fff' : isBubble ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.6)',
+                      fontWeight: isFav || isQualified ? 700 : 500,
+                      color: isFav ? 'rgba(251,191,36,0.95)' : isQualified ? '#fff' : isBubble ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.6)',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',

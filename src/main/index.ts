@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, screen, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, screen, ipcMain, session } from 'electron'
 import path from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { createTray, getTrayBounds } from './tray'
@@ -33,6 +33,17 @@ function createWindow() {
       preload: path.join(__dirname, '../preload/index.js'),
       sandbox: false,
     },
+  })
+
+  // Allow renderer fetch() to read cross-origin responses (needed for ESPN, BBC, etc.)
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Access-Control-Allow-Origin': ['*'],
+        'Access-Control-Allow-Headers': ['*'],
+      },
+    })
   })
 
   mainWindow.on('blur', () => { if (!isQuitting) mainWindow?.hide() })

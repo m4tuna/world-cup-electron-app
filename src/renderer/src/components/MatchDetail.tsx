@@ -414,6 +414,20 @@ export default function MatchDetail({ match, onBack, onTeamClick, onPlayerClick 
           </div>
         </div>
 
+        {/* Odds one-liner */}
+        {summary?.odds && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: '0 10px', padding: '0 0 10px', fontSize: '10px' }}>
+            <span style={{ color: 'rgba(255,255,255,0.22)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', fontSize: '9px' }}>DraftKings</span>
+            <span style={{ color: 'rgba(255,255,255,0.55)' }}>{match.homeTeam.abbreviation} <span style={{ fontWeight: 700, color: summary.odds.homeIsFavorite ? 'rgba(74,222,128,0.85)' : 'rgba(255,255,255,0.75)' }}>{fmt(summary.odds.homeMoneyLine)}</span></span>
+            <span style={{ color: 'rgba(255,255,255,0.2)' }}>·</span>
+            <span style={{ color: 'rgba(255,255,255,0.55)' }}>Draw <span style={{ fontWeight: 700, color: 'rgba(255,255,255,0.75)' }}>{fmt(summary.odds.drawMoneyLine)}</span></span>
+            <span style={{ color: 'rgba(255,255,255,0.2)' }}>·</span>
+            <span style={{ color: 'rgba(255,255,255,0.55)' }}>{match.awayTeam.abbreviation} <span style={{ fontWeight: 700, color: !summary.odds.homeIsFavorite ? 'rgba(74,222,128,0.85)' : 'rgba(255,255,255,0.75)' }}>{fmt(summary.odds.awayMoneyLine)}</span></span>
+            <span style={{ color: 'rgba(255,255,255,0.2)' }}>·</span>
+            <span style={{ color: 'rgba(255,255,255,0.45)' }}>O/U <span style={{ fontWeight: 600 }}>{summary.odds.overUnder}</span></span>
+          </div>
+        )}
+
         {/* Tabs */}
         <div style={{ display: 'flex', gap: '3px', marginBottom: '10px' }}>
           {TABS.map((t) => (
@@ -503,30 +517,6 @@ export default function MatchDetail({ match, onBack, onTeamClick, onPlayerClick 
                   awayTeamName={match.awayTeam.name}
                   match={match}
                 />
-              </div>
-            )}
-
-            {/* Odds */}
-            {summary?.odds && (
-              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '12px 14px' }}>
-                <p style={{ fontSize: '9px', fontWeight: 600, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 10px' }}>DraftKings Odds</p>
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-                  {[
-                    { label: match.homeTeam.abbreviation, ml: summary.odds.homeMoneyLine, flag: match.homeTeam.flagEmoji, fav: summary.odds.homeIsFavorite },
-                    { label: 'Draw', ml: summary.odds.drawMoneyLine, flag: '🤝', fav: false },
-                    { label: match.awayTeam.abbreviation, ml: summary.odds.awayMoneyLine, flag: match.awayTeam.flagEmoji, fav: !summary.odds.homeIsFavorite },
-                  ].map((item) => (
-                    <div key={item.label} style={{ flex: 1, background: item.fav ? 'rgba(74,222,128,0.08)' : 'rgba(255,255,255,0.04)', border: item.fav ? '1px solid rgba(74,222,128,0.2)' : '1px solid rgba(255,255,255,0.07)', borderRadius: '9px', padding: '8px 6px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '16px', marginBottom: '3px' }}>{item.flag}</div>
-                      <div style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.7)', marginBottom: '3px' }}>{item.label}</div>
-                      <div style={{ fontSize: '14px', fontWeight: 800, color: item.ml < 0 ? 'rgba(74,222,128,0.9)' : 'rgba(255,255,255,0.8)', fontVariantNumeric: 'tabular-nums' }}>{fmt(item.ml)}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'rgba(255,255,255,0.48)' }}>
-                  <span>Spread: <span style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>{summary.odds.spreadDetails}</span></span>
-                  <span>O/U: <span style={{ color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>{summary.odds.overUnder}</span></span>
-                </div>
               </div>
             )}
 

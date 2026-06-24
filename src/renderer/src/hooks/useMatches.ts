@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { useMatchStore } from '../store/matchStore'
+import { playSound } from '../lib/sounds'
 import type { Match, Settings } from '../types'
 
 declare global {
@@ -37,17 +38,27 @@ declare global {
       getTeamPage: (teamId: string) => Promise<unknown>
       getPlayerPage: (playerId: string) => Promise<unknown>
       onCastDevices: (cb: (devices: unknown[]) => void) => () => void
+      setNotifyEvent: (event: string, config: object) => Promise<void>
+      openNotificationPrefs: () => Promise<void>
+      previewNotification: (event: string) => Promise<void>
+      onEventSound: (cb: (soundId: string) => void) => () => void
+      getNewsFeed: () => Promise<unknown[]>
+      getArticleHtml: (url: string) => Promise<string>
+      getLeaders: (season: number) => Promise<unknown[]>
+      setFavoriteTeams: (abbrs: string[]) => Promise<void>
+      setPhoneNotifyEnabled: (v: boolean) => Promise<void>
+      setExpoPushToken: (token: string) => Promise<void>
+      testPhoneNotification: () => Promise<void>
+      getTeams: (sport: string, league: string) => Promise<{ id: string; abbreviation: string; name: string; logo?: string }[]>
+      setActiveLeague: (leagueId: string) => Promise<void>
+      setEnabledLeagues: (ids: string[]) => Promise<void>
+      setTeamSubscriptions: (subs: Record<string, string[]>) => Promise<void>
     }
   }
 }
 
 export function useMatches() {
   const { setTodayMatches, setUpcomingMatches, setSettings } = useMatchStore()
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-
-  useEffect(() => {
-    audioRef.current = new Audio('/sounds/whistle.wav')
-  }, [])
 
   useEffect(() => {
     window.api.getCachedMatches().then((matches) => {
@@ -62,14 +73,14 @@ export function useMatches() {
 
     const unsubMatches = window.api.onMatchesUpdate(setTodayMatches)
     const unsubSettings = window.api.onSettingsUpdate(setSettings)
-    const unsubSound = window.api.onPlaySound(() => {
-      audioRef.current?.play().catch(() => {})
-    })
+    const unsubSound = window.api.onPlaySound(() => playSound('whistle'))
+    const unsubEventSound = window.api.onEventSound((soundId) => playSound(soundId))
 
     return () => {
       unsubMatches()
       unsubSettings()
       unsubSound()
+      unsubEventSound()
     }
   }, [setTodayMatches, setUpcomingMatches, setSettings])
 }

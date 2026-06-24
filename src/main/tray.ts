@@ -11,6 +11,10 @@ function getIconPath() {
     : path.join(process.resourcesPath, 'resources', 'icon-tray.png')
 }
 
+function teamLabel(team: Match['homeTeam']): string {
+  return team.flagEmoji === '🏳️' ? team.abbreviation : team.flagEmoji
+}
+
 function buildTitle(liveMatches: Match[]) {
   if (!liveMatches.length) return '⚽'
   return liveMatches.map((m) => {
@@ -27,7 +31,7 @@ function buildTitle(liveMatches: Match[]) {
     } else {
       suffix = ''
     }
-    return `${m.homeTeam.flagEmoji} ${m.homeScore}-${m.awayScore} ${m.awayTeam.flagEmoji}${suffix}`
+    return `${teamLabel(m.homeTeam)} ${m.homeScore}-${m.awayScore} ${teamLabel(m.awayTeam)}${suffix}`
   }).join('   ')
 }
 

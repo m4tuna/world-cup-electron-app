@@ -95,7 +95,7 @@ function TrophySVG({ size = 40 }: { size?: number }) {
 type TeamClickFn = (teamId: string, teamName: string, flagEmoji: string) => void
 
 // ── Compact match card ────────────────────────────────────────────────
-function CompactCard({ m, isFinal, onTeamClick }: { m: BracketMatchup; isFinal?: boolean; onTeamClick?: TeamClickFn }) {
+function CompactCard({ m, isFinal, onTeamClick, favoriteTeams }: { m: BracketMatchup; isFinal?: boolean; onTeamClick?: TeamClickFn; favoriteTeams?: string[] }) {
   const isPost = m.status === 'post'
   const isLive = m.status === 'in'
   const homeWins = isPost && (m.home.winner ?? false)
@@ -126,6 +126,7 @@ function CompactCard({ m, isFinal, onTeamClick }: { m: BracketMatchup; isFinal?:
         const loses = ti === 0 ? awayWins : homeWins
         const slot = isSlot(team.abbreviation)
         const canClick = !slot && !!team.id && !!onTeamClick
+        const isFav = !!favoriteTeams?.length && !slot && favoriteTeams.includes(team.abbreviation)
         return (
           <div
             key={ti}
@@ -134,8 +135,9 @@ function CompactCard({ m, isFinal, onTeamClick }: { m: BracketMatchup; isFinal?:
               display: 'flex', alignItems: 'center', gap: '6px',
               padding: isFinal ? '9px 11px' : '7px 9px',
               borderBottom: ti === 0 ? '1px solid rgba(255,255,255,0.06)' : 'none',
-              background: wins
-                ? 'rgba(74,222,128,0.08)'
+              background: isFav
+                ? 'rgba(251,191,36,0.1)'
+                : wins ? 'rgba(74,222,128,0.08)'
                 : loses ? 'rgba(0,0,0,0.15)' : 'transparent',
               cursor: canClick ? 'pointer' : 'default',
             }}
@@ -150,9 +152,10 @@ function CompactCard({ m, isFinal, onTeamClick }: { m: BracketMatchup; isFinal?:
             <span style={{
               flex: 1,
               fontSize: slot ? '8px' : isFinal ? '12px' : '11px',
-              fontWeight: wins ? 800 : slot ? 400 : 600,
+              fontWeight: isFav || wins ? 800 : slot ? 400 : 600,
               color: slot
                 ? 'rgba(255,255,255,0.2)'
+                : isFav ? 'rgba(251,191,36,0.95)'
                 : wins ? '#ffffff'
                 : loses ? 'rgba(255,255,255,0.22)'
                 : 'rgba(255,255,255,0.85)',
@@ -298,7 +301,7 @@ function RoundLabel({
 }
 
 // ── Full horizontal bracket tree ──────────────────────────────────────
-function BracketTree({ rounds, onTeamClick }: { rounds: BracketRound[]; onTeamClick?: TeamClickFn }) {
+function BracketTree({ rounds, onTeamClick, favoriteTeams }: { rounds: BracketRound[]; onTeamClick?: TeamClickFn; favoriteTeams?: string[] }) {
   if (rounds.length === 0) return null
 
   const firstCount = rounds[0].matchups.length
@@ -333,7 +336,7 @@ function BracketTree({ rounds, onTeamClick }: { rounds: BracketRound[]; onTeamCl
                     key={m.id}
                     style={{ height: slotH, display: 'flex', alignItems: 'center', padding: '4px 2px' }}
                   >
-                    <CompactCard m={m} isFinal={isFinal} onTeamClick={onTeamClick} />
+                    <CompactCard m={m} isFinal={isFinal} onTeamClick={onTeamClick} favoriteTeams={favoriteTeams} />
                   </div>
                 ))}
               </div>
@@ -354,7 +357,7 @@ function BracketTree({ rounds, onTeamClick }: { rounds: BracketRound[]; onTeamCl
 }
 
 // ── Standalone card for 3rd place ─────────────────────────────────────
-function StandaloneCard({ m, onTeamClick }: { m: BracketMatchup; onTeamClick?: TeamClickFn }) {
+function StandaloneCard({ m, onTeamClick, favoriteTeams }: { m: BracketMatchup; onTeamClick?: TeamClickFn; favoriteTeams?: string[] }) {
   const isPost = m.status === 'post'
   const isLive = m.status === 'in'
   const homeWins = isPost && (m.home.winner ?? false)
@@ -375,19 +378,20 @@ function StandaloneCard({ m, onTeamClick }: { m: BracketMatchup; onTeamClick?: T
         const loses = ti === 0 ? awayWins : homeWins
         const slot = isSlot(team.abbreviation)
         const canClick = !slot && !!team.id && !!onTeamClick
+        const isFav = !!favoriteTeams?.length && !slot && favoriteTeams.includes(team.abbreviation)
         return (
           <div key={ti}
             onClick={canClick ? (e) => { e.stopPropagation(); onTeamClick!(team.id, team.name, team.flagEmoji) } : undefined}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px',
               borderBottom: ti === 0 ? '1px solid rgba(255,255,255,0.04)' : 'none',
-              background: wins ? 'rgba(74,222,128,0.06)' : loses ? 'rgba(0,0,0,0.12)' : 'transparent',
+              background: isFav ? 'rgba(251,191,36,0.1)' : wins ? 'rgba(74,222,128,0.06)' : loses ? 'rgba(0,0,0,0.12)' : 'transparent',
               cursor: canClick ? 'pointer' : 'default',
             }}>
             <span style={{ fontSize: '16px', opacity: slot ? 0.25 : loses ? 0.45 : 1, flexShrink: 0 }}>{team.flagEmoji}</span>
             <span style={{
-              flex: 1, fontSize: slot ? '9px' : '12px', fontWeight: wins ? 700 : slot ? 400 : 600,
-              color: slot ? 'rgba(255,255,255,0.22)' : wins ? '#fff' : loses ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.88)',
+              flex: 1, fontSize: slot ? '9px' : '12px', fontWeight: isFav || wins ? 700 : slot ? 400 : 600,
+              color: slot ? 'rgba(255,255,255,0.22)' : isFav ? 'rgba(251,191,36,0.95)' : wins ? '#fff' : loses ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.88)',
               fontStyle: slot ? 'italic' : 'normal',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
@@ -408,9 +412,10 @@ function StandaloneCard({ m, onTeamClick }: { m: BracketMatchup; onTeamClick?: T
 // ── Main ──────────────────────────────────────────────────────────────
 const BRACKET_ORDER = ['Round of 32', 'Round of 16', 'Quarterfinals', 'Semifinals', 'Final']
 
-export default function Bracket({ onTeamClick }: { onTeamClick?: TeamClickFn }) {
+export default function Bracket({ onTeamClick, favoriteTeams }: { onTeamClick?: TeamClickFn; favoriteTeams?: string[] }) {
   const [rounds, setRounds] = useState<BracketRound[]>([])
   const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     window.api.getBracket().then((data) => {
@@ -418,6 +423,12 @@ export default function Bracket({ onTeamClick }: { onTeamClick?: TeamClickFn }) 
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
+
+  function toggleExpand() {
+    const next = !expanded
+    setExpanded(next)
+    window.api.setPanelWidth?.(next ? 940 : 500)
+  }
 
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', padding: '52px 0' }}>
@@ -461,9 +472,27 @@ export default function Bracket({ onTeamClick }: { onTeamClick?: TeamClickFn }) 
           FIFA World Cup 2026 · Knockout Stage
         </span>
         <div style={{ flex: 1, height: '1px', background: 'linear-gradient(to left, transparent, rgba(255,255,255,0.08))' }} />
+        <button
+          onClick={toggleExpand}
+          title={expanded ? 'Collapse bracket' : 'Expand bracket'}
+          style={{
+            flexShrink: 0,
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '6px',
+            width: '22px', height: '22px',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', color: 'rgba(255,255,255,0.45)', fontSize: '11px',
+            lineHeight: 1, padding: 0,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.1)'; (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.75)' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'; (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.45)' }}
+        >
+          {expanded ? '⊠' : '⊞'}
+        </button>
       </div>
 
-      <BracketTree rounds={bracketRounds} onTeamClick={onTeamClick} />
+      <BracketTree rounds={bracketRounds} onTeamClick={onTeamClick} favoriteTeams={favoriteTeams} />
 
       {thirdPlace && thirdPlace.matchups.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -472,7 +501,7 @@ export default function Bracket({ onTeamClick }: { onTeamClick?: TeamClickFn }) 
             <span style={{ fontSize: '8px', fontWeight: 700, color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>3rd Place</span>
             <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.07)' }} />
           </div>
-          {thirdPlace.matchups.map((m, i) => <StandaloneCard key={m.id || i} m={m} onTeamClick={onTeamClick} />)}
+          {thirdPlace.matchups.map((m, i) => <StandaloneCard key={m.id || i} m={m} onTeamClick={onTeamClick} favoriteTeams={favoriteTeams} />)}
         </div>
       )}
     </div>

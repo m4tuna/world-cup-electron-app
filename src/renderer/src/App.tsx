@@ -11,7 +11,22 @@ import { getProviderByUrl } from './lib/providers'
 import CastPanel from './components/CastPanel'
 import TeamPage from './components/TeamPage'
 import PlayerPage from './components/PlayerPage'
-import type { Match, CastDevice } from './types'
+import NewsFeed from './components/NewsFeed'
+import Leaders from './components/Leaders'
+import ArticleReader from './components/ArticleReader'
+import { LEAGUES, SPORT_GROUPS, getLeague } from './lib/leagues'
+import type { Match, CastDevice, EventNotif, Settings } from './types'
+
+function isMatchSubscribed(matchId: string, homeAbbr: string, awayAbbr: string, s: Settings): boolean {
+  if (s.unsubscribedMatches.includes(matchId)) return false
+  if (s.subscribedMatches?.includes(matchId)) return true
+  const leagueId = s.activeLeagueId ?? 'fifa.world'
+  const leagueFavs = s.teamSubscriptions?.[leagueId] ?? []
+  const globalFavs = leagueId === 'fifa.world' ? (s.favoriteTeams ?? []) : []
+  const favTeams = [...new Set([...leagueFavs, ...globalFavs])]
+  if (favTeams.length > 0) return favTeams.includes(homeAbbr) || favTeams.includes(awayAbbr)
+  return false
+}
 
 type NavEntry =
   | { type: 'main' }
@@ -19,6 +34,7 @@ type NavEntry =
   | { type: 'match'; matchId: string }
   | { type: 'team'; teamId: string; teamName: string; flagEmoji: string }
   | { type: 'player'; playerId: string; playerName: string; position: string; teamFlag: string; teamAbbr: string }
+  | { type: 'article'; url: string; title: string }
 
 const TOURNAMENT_START = new Date('2026-06-11T00:00:00')
 const TOURNAMENT_END = new Date('2026-07-19T23:59:59')
@@ -31,19 +47,20 @@ function fmtDateParam(d: Date): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
 }
 
-type Tab = 'live' | 'schedule' | 'standings' | 'bracket'
-const TABS: { id: Tab; label: string }[] = [
-  { id: 'live', label: 'Today' },
-  { id: 'schedule', label: 'Schedule' },
+type Tab = 'scoreboard' | 'standings' | 'bracket' | 'leaders' | 'news'
+const ALL_TABS: { id: Tab; label: string; alwaysShow?: boolean }[] = [
+  { id: 'scoreboard', label: 'Scores', alwaysShow: true },
   { id: 'standings', label: 'Standings' },
   { id: 'bracket', label: 'Bracket' },
+  { id: 'leaders', label: 'Leaders' },
+  { id: 'news', label: 'News', alwaysShow: true },
 ]
 
 const CARET_H = 10   // px above the card
 
 export default function App() {
   useMatches()
-  const { todayMatches, upcomingMatches, settings, activeTab, setActiveTab, setSettings } = useMatchStore()
+  const { todayMatches, upcomingMatches, settings, activeTab, setActiveTab, setSettings, setTodayMatches } = useMatchStore()
   const [caretX, setCaretX] = useState(250)
   const [castDevices, setCastDevices] = useState<CastDevice[]>([])
   const [matchesLoading, setMatchesLoading] = useState(true)
@@ -51,17 +68,28 @@ export default function App() {
   const current = navStack[navStack.length - 1]
   const push = useCallback((e: NavEntry) => setNavStack(s => [...s, e]), [])
   const back = useCallback(() => setNavStack(s => s.length > 1 ? s.slice(0, -1) : s), [])
-  const [scheduleDate, setScheduleDate] = useState<Date>(() => {
-    const d = new Date(); d.setDate(d.getDate() + 1); return d
-  })
+  const [scheduleDate, setScheduleDate] = useState<Date>(() => new Date())
   const [scheduleDayMatches, setScheduleDayMatches] = useState<Match[] | null>(null)
   const [scheduleDayLoading, setScheduleDayLoading] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
-  const [calendarMonth, setCalendarMonth] = useState(() => new Date(2026, 5, 1))
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date())
+  const [showLeaguePicker, setShowLeaguePicker] = useState(false)
+  const [pickerPos, setPickerPos] = useState({ top: 60, left: 20 })
   const calendarRef = useRef<HTMLDivElement>(null)
   const calendarBtnRef = useRef<HTMLButtonElement>(null)
+  const leaguePickerRef = useRef<HTMLDivElement>(null)
+  const leaguePickerBtnRef = useRef<HTMLButtonElement>(null)
   const fixedRef = useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  const activeLeagueId = settings.activeLeagueId ?? 'fifa.world'
+  const activeLeague = getLeague(activeLeagueId)
+  const visibleTabs = ALL_TABS.filter((t) =>
+    t.alwaysShow ||
+    (t.id === 'standings' && activeLeague.hasStandings) ||
+    (t.id === 'bracket' && activeLeague.hasBracket) ||
+    (t.id === 'leaders' && activeLeague.hasLeaders)
+  )
 
   useEffect(() => {
     const handler = (_: unknown, x: number) => {
@@ -111,7 +139,7 @@ export default function App() {
     })
   }, [scheduleDate])
 
-  useEffect(() => { setShowCalendar(false) }, [activeTab, current.type])
+  useEffect(() => { setShowCalendar(false); setShowLeaguePicker(false) }, [activeTab, current.type])
 
   useEffect(() => {
     if (!showCalendar) return
@@ -124,20 +152,70 @@ export default function App() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showCalendar])
 
+  useEffect(() => {
+    if (!showLeaguePicker) return
+    const handler = (e: MouseEvent) => {
+      if (leaguePickerRef.current && !leaguePickerRef.current.contains(e.target as Node)) {
+        setShowLeaguePicker(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showLeaguePicker])
+
   const liveMatches = todayMatches.filter((m) => m.status === 'in')
   const todayPre = todayMatches.filter((m) => m.status === 'pre')
   const todayPost = todayMatches.filter((m) => m.status === 'post')
-  useEffect(() => {
-    if (liveMatches.length > 0 && activeTab === 'schedule' && current.type === 'main') setActiveTab('live')
-  }, [liveMatches.length])
-
-  const handleUnsubscribe = (id: string) => window.api.unsubscribeMatch(id)
-  const handleResubscribe = (id: string) => window.api.resubscribeMatch(id)
+  const isScheduleToday = isSameDay(scheduleDate, new Date())
+  const handleToggleMatch = useCallback((matchId: string, homeAbbr: string, awayAbbr: string) => {
+    const subbed = isMatchSubscribed(matchId, homeAbbr, awayAbbr, settings)
+    if (subbed) {
+      window.api.unsubscribeMatch(matchId)
+      setSettings({ ...settings, unsubscribedMatches: [...settings.unsubscribedMatches, matchId], subscribedMatches: (settings.subscribedMatches ?? []).filter(id => id !== matchId) })
+    } else {
+      window.api.resubscribeMatch(matchId)
+      setSettings({ ...settings, unsubscribedMatches: settings.unsubscribedMatches.filter(id => id !== matchId), subscribedMatches: [...(settings.subscribedMatches ?? []), matchId] })
+    }
+  }, [settings, setSettings])
   const handleSetMinutes = (m: number) => { window.api.setNotificationMinutes(m); setSettings({ ...settings, notificationMinutes: m }) }
   const handleSetSound = (e: boolean) => { window.api.setSoundEnabled(e); setSettings({ ...settings, soundEnabled: e }) }
-  const handleResetSubs = () => { window.api.resetSubscriptions(); setSettings({ ...settings, unsubscribedMatches: [] }) }
+  const handleResetSubs = () => { window.api.resetSubscriptions(); setSettings({ ...settings, unsubscribedMatches: [], subscribedMatches: [] }) }
   const handleSetWatchProvider = (url: string) => { window.api.setWatchProviderUrl(url); setSettings({ ...settings, watchProviderUrl: url }) }
   const handleSetWatchMethod = (m: 'browser' | 'airplay') => { window.api.setWatchMethod(m); setSettings({ ...settings, watchMethod: m }) }
+  const handleSetNotifyEvent = (event: string, config: EventNotif) => {
+    window.api.setNotifyEvent(event, config)
+    setSettings({ ...settings, [event]: config })
+  }
+  const handleSetFavoriteTeams = (abbrs: string[]) => {
+    window.api.setFavoriteTeams(abbrs)
+    setSettings({ ...settings, favoriteTeams: abbrs })
+  }
+  const handleSetActiveLeague = useCallback((leagueId: string) => {
+    window.api.setActiveLeague(leagueId)
+    setSettings({ ...settings, activeLeagueId: leagueId })
+    setTodayMatches([])
+    setMatchesLoading(true)
+    setScheduleDate(new Date())
+    setNavStack([{ type: 'main' }])
+    setActiveTab('scoreboard')
+    setShowLeaguePicker(false)
+  }, [settings, setSettings, setTodayMatches, setActiveTab])
+  const handleSetEnabledLeagues = useCallback((ids: string[]) => {
+    window.api.setEnabledLeagues(ids)
+    setSettings({ ...settings, enabledLeagueIds: ids })
+  }, [settings, setSettings])
+  const handleSetTeamSubscriptions = useCallback((subs: Record<string, string[]>) => {
+    window.api.setTeamSubscriptions(subs)
+    setSettings({ ...settings, teamSubscriptions: subs })
+  }, [settings, setSettings])
+  const handleSetPhoneNotifyEnabled = (v: boolean) => {
+    window.api.setPhoneNotifyEnabled(v)
+    setSettings({ ...settings, phoneNotifyEnabled: v })
+  }
+  const handleSetExpoPushToken = (token: string) => {
+    window.api.setExpoPushToken(token)
+    setSettings({ ...settings, expoPushToken: token })
+  }
 
   const watchProvider = getProviderByUrl(settings.watchProviderUrl ?? '')
   const watchProviderName = watchProvider?.name ?? 'Watch Live'
@@ -150,7 +228,6 @@ export default function App() {
     if (playerId) push({ type: 'player', playerId, playerName, position, teamFlag, teamAbbr })
   }, [push])
 
-  const isScheduleToday = isSameDay(scheduleDate, new Date())
   const scheduleDisplayMatches = isScheduleToday
     ? [...liveMatches, ...todayPre, ...todayPost]
     : scheduleDayMatches ?? []
@@ -174,25 +251,26 @@ export default function App() {
   for (let i = 0; i < calFirstDow; i++) calCells.push(null)
   for (let d = 1; d <= calDaysInMonth; d++) calCells.push(new Date(calYear, calMonthIdx, d))
   const calToday = new Date()
+  const isWC = activeLeagueId === 'fifa.world'
 
   // ── Shared style constants ─────────────────────────────────────
   const PAD = 20
   const CARD_BG = 'rgba(8, 8, 12, 0.98)'
   const BLUR = 'blur(28px) saturate(180%)'
 
-  // Resize window: detail pages + tall tabs fill to screen height; live tab fits content
   useEffect(() => {
-    if (current.type !== 'main' || activeTab === 'standings' || activeTab === 'bracket' || activeTab === 'schedule') {
+    const tallTab = activeTab !== 'scoreboard' || !isScheduleToday
+    if (current.type !== 'main' || tallTab || showLeaguePicker) {
       window.api.resizePanel?.(9999)
     } else {
       const fixedH = fixedRef.current?.offsetHeight ?? 0
       const contentH = scrollRef.current?.scrollHeight ?? 0
       window.api.resizePanel?.(CARET_H + fixedH + contentH + 6)
     }
-  }, [current.type, activeTab, todayMatches.length, upcomingMatches.length, castDevices.length])
+  }, [current.type, activeTab, todayMatches.length, upcomingMatches.length, castDevices.length, isScheduleToday, matchesLoading, activeLeagueId, showLeaguePicker])
 
   useEffect(() => {
-    window.api.setPanelWidth?.(activeTab === 'bracket' ? 940 : 500)
+    window.api.setPanelWidth?.(500)
   }, [activeTab])
 
   return (
@@ -236,13 +314,76 @@ export default function App() {
         <div ref={fixedRef} style={{ flexShrink: 0 }}>
 
         {/* ── Header ── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `14px ${PAD}px 10px` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-            <span style={{ fontSize: '18px' }}>⚽</span>
-            <div>
-              <p style={{ fontSize: '13px', fontWeight: 700, color: '#fff', lineHeight: 1, letterSpacing: '-0.015em', margin: 0 }}>World Cup 2026</p>
-              <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '2px', margin: 0 }}>USA · Canada · Mexico</p>
-            </div>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: `14px ${PAD}px 10px`, overflow: 'visible' }}>
+          {/* League picker button */}
+          <div ref={leaguePickerRef} style={{ position: 'relative' }}>
+            <button
+              ref={leaguePickerBtnRef}
+              onClick={() => {
+                if (!showLeaguePicker && leaguePickerBtnRef.current) {
+                  const r = leaguePickerBtnRef.current.getBoundingClientRect()
+                  setPickerPos({ top: r.bottom + 10, left: r.left })
+                }
+                setShowLeaguePicker(v => !v)
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '9px',
+                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                textAlign: 'left', fontFamily: 'inherit',
+              }}
+            >
+              <span style={{ fontSize: '20px', lineHeight: 1 }}>{activeLeague.icon}</span>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <p style={{ fontSize: '13px', fontWeight: 700, color: '#fff', lineHeight: 1, letterSpacing: '-0.015em', margin: 0 }}>{activeLeague.name}</p>
+                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', lineHeight: 1 }}>▾</span>
+                </div>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', marginTop: '2px', margin: 0 }}>{activeLeague.sport.charAt(0).toUpperCase() + activeLeague.sport.slice(1)}</p>
+              </div>
+            </button>
+
+            {/* League picker popover — fixed so it escapes overflow:hidden on the card */}
+            {showLeaguePicker && (
+              <div style={{
+                position: 'fixed', top: pickerPos.top, left: pickerPos.left, zIndex: 200,
+                background: 'rgba(14,16,22,0.99)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
+                border: '1px solid rgba(255,255,255,0.13)', borderRadius: '14px',
+                padding: '8px', minWidth: '210px',
+                boxShadow: '0 16px 48px rgba(0,0,0,0.7)',
+                maxHeight: 'calc(100vh - 90px)', overflowY: 'auto',
+              }}>
+                {SPORT_GROUPS.map((group) => {
+                  const groupLeagues = LEAGUES.filter((l) => l.sport === group.sport)
+                  return (
+                    <div key={group.sport} style={{ marginBottom: '4px' }}>
+                      <p style={{ fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '6px 8px 4px' }}>{group.label}</p>
+                      {groupLeagues.map((league) => {
+                        const isActive = league.id === activeLeagueId
+                        const isEnabled = (settings.enabledLeagueIds ?? ['fifa.world']).includes(league.id)
+                        return (
+                          <button
+                            key={league.id}
+                            onClick={() => handleSetActiveLeague(league.id)}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '9px',
+                              width: '100%', padding: '7px 10px', borderRadius: '8px',
+                              background: isActive ? 'rgba(255,255,255,0.1)' : 'transparent',
+                              border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+                            }}
+                          >
+                            <span style={{ fontSize: '16px', lineHeight: 1, flexShrink: 0 }}>{league.icon}</span>
+                            <span style={{ fontSize: '12px', fontWeight: isActive ? 700 : 400, color: isActive ? '#fff' : 'rgba(255,255,255,0.6)', flex: 1 }}>{league.name}</span>
+                            {isEnabled && !isActive && (
+                              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'rgba(74,222,128,0.7)', flexShrink: 0 }} />
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {liveMatches.length > 0 && (
@@ -309,20 +450,23 @@ export default function App() {
         {current.type === 'main' && (
           <>
             <div style={{ display: 'flex', gap: '3px', padding: `0 ${PAD}px 10px` }}>
-              {TABS.map((tab) => (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-                  flex: 1, padding: '5px 0', borderRadius: '7px', border: 'none',
-                  fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
-                  background: activeTab === tab.id ? 'rgba(255,255,255,0.1)' : 'transparent',
-                  color: activeTab === tab.id ? '#fff' : 'rgba(255,255,255,0.35)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
-                }}>
-                  {tab.id === 'live' && liveMatches.length > 0 && (
-                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#ef4444', display: 'block', flexShrink: 0 }} />
-                  )}
-                  {tab.label}
-                </button>
-              ))}
+              {visibleTabs.map((tab) => {
+                const isActive = activeTab === tab.id || (!visibleTabs.find(t => t.id === activeTab) && tab.id === 'scoreboard')
+                return (
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+                    flex: 1, padding: '5px 0', borderRadius: '7px', border: 'none',
+                    fontSize: '12px', fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
+                    background: isActive ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    color: isActive ? '#fff' : 'rgba(255,255,255,0.35)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px',
+                  }}>
+                    {tab.id === 'scoreboard' && liveMatches.length > 0 && (
+                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#ef4444', display: 'block', flexShrink: 0 }} />
+                    )}
+                    {tab.label}
+                  </button>
+                )
+              })}
             </div>
             <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', margin: `0 ${PAD}px` }} />
           </>
@@ -333,7 +477,14 @@ export default function App() {
         {/* ── Scrollable content ── */}
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
 
-          {current.type === 'player' ? (
+          {current.type === 'article' ? (
+            <ArticleReader
+              url={current.url}
+              title={current.title}
+              onBack={back}
+              onOpenExternal={(u) => window.api.openUrl(u)}
+            />
+          ) : current.type === 'player' ? (
             <PlayerPage
               playerId={current.playerId}
               playerName={current.playerName}
@@ -360,73 +511,42 @@ export default function App() {
             />
           ) : current.type === 'settings' ? (
             <>
-              <SettingsPanel settings={settings} onSetMinutes={handleSetMinutes} onSetSound={handleSetSound} onResetSubscriptions={handleResetSubs} onSetWatchProvider={handleSetWatchProvider} onSetWatchMethod={handleSetWatchMethod} onBack={back} />
+              <SettingsPanel settings={settings} onSetMinutes={handleSetMinutes} onSetSound={handleSetSound} onResetSubscriptions={handleResetSubs} onSetWatchProvider={handleSetWatchProvider} onSetWatchMethod={handleSetWatchMethod} onSetNotifyEvent={handleSetNotifyEvent} onSetFavoriteTeams={handleSetFavoriteTeams} onSetPhoneNotifyEnabled={handleSetPhoneNotifyEnabled} onSetExpoPushToken={handleSetExpoPushToken} onBack={back} onSetActiveLeague={handleSetActiveLeague} onSetEnabledLeagues={handleSetEnabledLeagues} onSetTeamSubscriptions={handleSetTeamSubscriptions} />
               <div style={{ height: '1px', background: 'rgba(255,255,255,0.07)', margin: '0 20px' }} />
               <CastPanel watchProviderName={watchProviderName} watchMethod={watchMethod} />
             </>
           ) : (<>
 
-          {/* TODAY */}
-          {activeTab === 'live' && (
-            <div style={{ padding: `14px ${PAD}px 0`, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {liveMatches.length === 0 && todayPre.length === 0 && todayPost.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '48px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '40px' }}>⚽</span>
-                  {matchesLoading ? (
-                    <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '13px', margin: 0 }}>Loading matches…</p>
-                  ) : (
-                    <>
-                      <p style={{ color: 'rgba(255,255,255,0.28)', fontSize: '13px', margin: 0 }}>No matches today</p>
-                      <button onClick={() => setActiveTab('schedule')} style={{ fontSize: '12px', color: 'rgba(74,222,128,0.8)', border: '1px solid rgba(74,222,128,0.25)', padding: '6px 14px', borderRadius: '8px', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', marginTop: '4px' }}>
-                        View schedule →
-                      </button>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <>
-                  {liveMatches.map((m) => (
-                    <MatchCard key={m.id} match={m} isUnsubscribed={settings.unsubscribedMatches.includes(m.id)} onUnsubscribe={() => handleUnsubscribe(m.id)} onResubscribe={() => handleResubscribe(m.id)} onClick={() => push({ type: 'match', matchId: m.id })} onTeamClick={handleTeamClick} onPlayerClick={handlePlayerClick} />
-                  ))}
-                  {todayPre.map((m) => (
-                    <MatchCard key={m.id} match={m} isUnsubscribed={settings.unsubscribedMatches.includes(m.id)} onUnsubscribe={() => handleUnsubscribe(m.id)} onResubscribe={() => handleResubscribe(m.id)} onClick={() => push({ type: 'match', matchId: m.id })} onTeamClick={handleTeamClick} onPlayerClick={handlePlayerClick} />
-                  ))}
-                  {todayPost.length > 0 && (
-                    <>
-                      <div style={{ fontSize: '9px', fontWeight: 600, color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.1em', paddingLeft: '2px' }}>Final</div>
-                      {todayPost.map((m) => (
-                        <MatchCard key={m.id} match={m} isUnsubscribed={settings.unsubscribedMatches.includes(m.id)} onUnsubscribe={() => handleUnsubscribe(m.id)} onResubscribe={() => handleResubscribe(m.id)} onClick={() => push({ type: 'match', matchId: m.id })} onTeamClick={handleTeamClick} onPlayerClick={handlePlayerClick} dimmed />
-                      ))}
-                    </>
-                  )}
-                </>
-              )}
-              <div style={{ marginBottom: '8px' }}><WatchNowCard hidden={isCasting} watchProviderUrl={settings.watchProviderUrl ?? 'https://watch.spectrum.net'} watchMethod={watchMethod} /></div>
-            </div>
-          )}
-
-          {/* SCHEDULE */}
-          {activeTab === 'schedule' && (
+          {/* SCOREBOARD */}
+          {activeTab === 'scoreboard' && (
             <div style={{ padding: `14px ${PAD}px 16px`, display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {/* Date navigation + calendar popover */}
               <div style={{ position: 'relative' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <button
                     onClick={() => setScheduleDate(prev => { const d = new Date(prev); d.setDate(d.getDate() - 1); return d })}
-                    disabled={isSameDay(scheduleDate, TOURNAMENT_START)}
+                    disabled={isWC && isSameDay(scheduleDate, TOURNAMENT_START)}
                     style={{
                       flexShrink: 0, width: '32px', height: '32px', borderRadius: '9px',
                       border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
-                      color: isSameDay(scheduleDate, TOURNAMENT_START) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
+                      color: (isWC && isSameDay(scheduleDate, TOURNAMENT_START)) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
                       fontSize: '18px', lineHeight: 1,
-                      cursor: isSameDay(scheduleDate, TOURNAMENT_START) ? 'default' : 'pointer',
+                      cursor: (isWC && isSameDay(scheduleDate, TOURNAMENT_START)) ? 'default' : 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
                     }}
                   >‹</button>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
-                      {isScheduleToday ? 'Today' : scheduleDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
+                        {isScheduleToday ? 'Today' : scheduleDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                      </span>
+                      {isScheduleToday && liveMatches.length > 0 && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.28)', padding: '2px 7px', borderRadius: '20px' }}>
+                          <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#ef4444', display: 'block' }} />
+                          <span style={{ fontSize: '10px', color: '#f87171', fontWeight: 600 }}>{liveMatches.length} Live</span>
+                        </div>
+                      )}
+                    </div>
                     {isScheduleToday ? (
                       <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.35)' }}>
                         {scheduleDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
@@ -440,17 +560,16 @@ export default function App() {
                   </div>
                   <button
                     onClick={() => setScheduleDate(prev => { const d = new Date(prev); d.setDate(d.getDate() + 1); return d })}
-                    disabled={isSameDay(scheduleDate, TOURNAMENT_END)}
+                    disabled={isWC && isSameDay(scheduleDate, TOURNAMENT_END)}
                     style={{
                       flexShrink: 0, width: '32px', height: '32px', borderRadius: '9px',
                       border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
-                      color: isSameDay(scheduleDate, TOURNAMENT_END) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
+                      color: (isWC && isSameDay(scheduleDate, TOURNAMENT_END)) ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
                       fontSize: '18px', lineHeight: 1,
-                      cursor: isSameDay(scheduleDate, TOURNAMENT_END) ? 'default' : 'pointer',
+                      cursor: (isWC && isSameDay(scheduleDate, TOURNAMENT_END)) ? 'default' : 'pointer',
                       display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
                     }}
                   >›</button>
-                  {/* Calendar picker button */}
                   <button
                     ref={calendarBtnRef}
                     onClick={() => {
@@ -476,91 +595,37 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Calendar popover */}
                 {showCalendar && (
                   <div
                     ref={calendarRef}
                     style={{
-                      position: 'absolute',
-                      top: 'calc(100% + 8px)',
-                      left: 0, right: 0,
-                      zIndex: 50,
-                      background: 'rgba(14, 16, 22, 0.99)',
-                      backdropFilter: 'blur(24px)',
-                      WebkitBackdropFilter: 'blur(24px)',
-                      border: '1px solid rgba(255,255,255,0.13)',
-                      borderRadius: '14px',
-                      padding: '14px',
+                      position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: 0, zIndex: 50,
+                      background: 'rgba(14, 16, 22, 0.99)', backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
+                      border: '1px solid rgba(255,255,255,0.13)', borderRadius: '14px', padding: '14px',
                       boxShadow: '0 16px 48px rgba(0,0,0,0.7)',
                     }}
                   >
-                    {/* Month navigation */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                      <button
-                        onClick={() => setCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
-                        disabled={calMonthIdx === 5}
-                        style={{
-                          width: '26px', height: '26px', borderRadius: '7px',
-                          border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
-                          color: calMonthIdx === 5 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
-                          fontSize: '16px', cursor: calMonthIdx === 5 ? 'default' : 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
-                        }}
-                      >‹</button>
-                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>
-                        {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                      </span>
-                      <button
-                        onClick={() => setCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
-                        disabled={calMonthIdx === 6}
-                        style={{
-                          width: '26px', height: '26px', borderRadius: '7px',
-                          border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)',
-                          color: calMonthIdx === 6 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.65)',
-                          fontSize: '16px', cursor: calMonthIdx === 6 ? 'default' : 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit',
-                        }}
-                      >›</button>
+                      <button onClick={() => setCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+                        style={{ width: '26px', height: '26px', borderRadius: '7px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.65)', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}>‹</button>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>{calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                      <button onClick={() => setCalendarMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+                        style={{ width: '26px', height: '26px', borderRadius: '7px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.65)', fontSize: '16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}>›</button>
                     </div>
-
-                    {/* Day-of-week headers */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', marginBottom: '4px' }}>
                       {['Su','Mo','Tu','We','Th','Fr','Sa'].map(day => (
                         <div key={day} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, color: 'rgba(255,255,255,0.28)', paddingBottom: '4px', letterSpacing: '0.04em' }}>{day}</div>
                       ))}
                     </div>
-
-                    {/* Day cells */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
                       {calCells.map((date, i) => {
                         if (!date) return <div key={`e${i}`} />
                         const sel = isSameDay(date, scheduleDate)
                         const tod = isSameDay(date, calToday)
-                        const inT = date >= TOURNAMENT_START && date <= TOURNAMENT_END
+                        const inRange = !isWC || (date >= TOURNAMENT_START && date <= TOURNAMENT_END)
                         return (
-                          <button
-                            key={date.getDate()}
-                            onClick={() => { if (inT) { setScheduleDate(date); setShowCalendar(false) } }}
-                            style={{
-                              padding: '7px 2px',
-                              borderRadius: '7px',
-                              border: sel
-                                ? '1px solid rgba(74,222,128,0.5)'
-                                : tod ? '1px solid rgba(255,255,255,0.18)' : '1px solid transparent',
-                              background: sel
-                                ? 'rgba(74,222,128,0.14)'
-                                : tod ? 'rgba(255,255,255,0.06)' : 'transparent',
-                              color: !inT
-                                ? 'rgba(255,255,255,0.13)'
-                                : sel ? 'rgba(74,222,128,0.95)' : tod ? '#fff' : 'rgba(255,255,255,0.72)',
-                              fontSize: '11px',
-                              fontWeight: sel || tod ? 700 : 400,
-                              cursor: inT ? 'pointer' : 'default',
-                              textAlign: 'center',
-                              fontFamily: 'inherit',
-                              lineHeight: 1,
-                            }}
-                          >
+                          <button key={date.getDate()} onClick={() => { if (inRange) { setScheduleDate(date); setShowCalendar(false) } }}
+                            style={{ padding: '7px 2px', borderRadius: '7px', border: sel ? '1px solid rgba(74,222,128,0.5)' : tod ? '1px solid rgba(255,255,255,0.18)' : '1px solid transparent', background: sel ? 'rgba(74,222,128,0.14)' : tod ? 'rgba(255,255,255,0.06)' : 'transparent', color: !inRange ? 'rgba(255,255,255,0.13)' : sel ? 'rgba(74,222,128,0.95)' : tod ? '#fff' : 'rgba(255,255,255,0.72)', fontSize: '11px', fontWeight: sel || tod ? 700 : 400, cursor: inRange ? 'pointer' : 'default', textAlign: 'center', fontFamily: 'inherit', lineHeight: 1 }}>
                             {date.getDate()}
                           </button>
                         )
@@ -571,28 +636,45 @@ export default function App() {
               </div>
               <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)' }} />
 
-              {/* Matches for selected date */}
+              {/* Matches */}
               {scheduleIsLoading ? (
                 <div style={{ textAlign: 'center', padding: '48px 0', color: 'rgba(255,255,255,0.4)', fontSize: '12px' }}>Loading…</div>
+              ) : isScheduleToday ? (
+                liveMatches.length === 0 && todayPre.length === 0 && todayPost.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '48px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '40px' }}>{activeLeague.scoreEmoji}</span>
+                    {matchesLoading
+                      ? <p style={{ color: 'rgba(255,255,255,0.22)', fontSize: '13px', margin: 0 }}>Loading matches…</p>
+                      : <p style={{ color: 'rgba(255,255,255,0.28)', fontSize: '13px', margin: 0 }}>No matches today</p>}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {liveMatches.map((m) => (
+                      <MatchCard key={m.id} match={m} isUnsubscribed={!isMatchSubscribed(m.id, m.homeTeam.abbreviation, m.awayTeam.abbreviation, settings)} onToggle={() => handleToggleMatch(m.id, m.homeTeam.abbreviation, m.awayTeam.abbreviation)} onClick={() => push({ type: 'match', matchId: m.id })} onTeamClick={handleTeamClick} onPlayerClick={handlePlayerClick} favoriteTeams={settings.favoriteTeams} />
+                    ))}
+                    {todayPre.map((m) => (
+                      <MatchCard key={m.id} match={m} isUnsubscribed={!isMatchSubscribed(m.id, m.homeTeam.abbreviation, m.awayTeam.abbreviation, settings)} onToggle={() => handleToggleMatch(m.id, m.homeTeam.abbreviation, m.awayTeam.abbreviation)} onClick={() => push({ type: 'match', matchId: m.id })} onTeamClick={handleTeamClick} onPlayerClick={handlePlayerClick} favoriteTeams={settings.favoriteTeams} />
+                    ))}
+                    {todayPost.length > 0 && (
+                      <>
+                        <div style={{ fontSize: '9px', fontWeight: 600, color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.1em', paddingLeft: '2px' }}>Final</div>
+                        {todayPost.map((m) => (
+                          <MatchCard key={m.id} match={m} isUnsubscribed={!isMatchSubscribed(m.id, m.homeTeam.abbreviation, m.awayTeam.abbreviation, settings)} onToggle={() => handleToggleMatch(m.id, m.homeTeam.abbreviation, m.awayTeam.abbreviation)} onClick={() => push({ type: 'match', matchId: m.id })} onTeamClick={handleTeamClick} onPlayerClick={handlePlayerClick} favoriteTeams={settings.favoriteTeams} dimmed />
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )
               ) : scheduleDisplayMatches.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '48px 0', color: 'rgba(255,255,255,0.22)', fontSize: '12px' }}>No matches on this date</div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   {scheduleDisplayMatches.map((m) => (
-                    <MatchCard
-                      key={m.id}
-                      match={m}
-                      isUnsubscribed={settings.unsubscribedMatches.includes(m.id)}
-                      onUnsubscribe={() => handleUnsubscribe(m.id)}
-                      onResubscribe={() => handleResubscribe(m.id)}
-                      onClick={() => push({ type: 'match', matchId: m.id })}
-                      onTeamClick={handleTeamClick}
-                      onPlayerClick={handlePlayerClick}
-                      dimmed={m.status === 'post'}
-                    />
+                    <MatchCard key={m.id} match={m} isUnsubscribed={!isMatchSubscribed(m.id, m.homeTeam.abbreviation, m.awayTeam.abbreviation, settings)} onToggle={() => handleToggleMatch(m.id, m.homeTeam.abbreviation, m.awayTeam.abbreviation)} onClick={() => push({ type: 'match', matchId: m.id })} onTeamClick={handleTeamClick} onPlayerClick={handlePlayerClick} favoriteTeams={settings.favoriteTeams} dimmed={m.status === 'post'} />
                   ))}
                 </div>
               )}
+
               <WatchNowCard hidden={isCasting} watchProviderUrl={settings.watchProviderUrl ?? 'https://watch.spectrum.net'} watchMethod={watchMethod} />
             </div>
           )}
@@ -600,15 +682,25 @@ export default function App() {
           {/* STANDINGS */}
           {activeTab === 'standings' && (
             <div style={{ padding: `14px ${PAD}px 16px` }}>
-              <GroupStandings onTeamClick={handleTeamClick} />
+              <GroupStandings onTeamClick={handleTeamClick} favoriteTeams={settings.favoriteTeams} />
             </div>
           )}
 
           {/* BRACKET */}
           {activeTab === 'bracket' && (
             <div style={{ padding: `14px ${PAD}px 16px` }}>
-              <Bracket onTeamClick={handleTeamClick} />
+              <Bracket onTeamClick={handleTeamClick} favoriteTeams={settings.favoriteTeams} />
             </div>
+          )}
+
+          {/* LEADERS */}
+          {activeTab === 'leaders' && (
+            <Leaders onPlayerClick={(id) => push({ type: 'player', playerId: id })} />
+          )}
+
+          {/* NEWS */}
+          {activeTab === 'news' && (
+            <NewsFeed onOpenArticle={(url, title) => push({ type: 'article', url, title })} />
           )}
 
           </>)}

@@ -54,6 +54,25 @@ const api = {
     ipcRenderer.on('cast:devices', handler)
     return () => ipcRenderer.off('cast:devices', handler)
   },
+  setNotifyEvent: (event: string, config: object) => ipcRenderer.invoke('set-notify-event', event, config),
+  setFavoriteTeams: (abbrs: string[]) => ipcRenderer.invoke('set-favorite-teams', abbrs),
+  setPhoneNotifyEnabled: (v: boolean) => ipcRenderer.invoke('set-phone-notify-enabled', v),
+  setExpoPushToken: (token: string) => ipcRenderer.invoke('set-expo-push-token', token),
+  testPhoneNotification: () => ipcRenderer.invoke('test-phone-notification'),
+  getNewsFeed: () => ipcRenderer.invoke('get-news-feed'),
+  getArticleHtml: (url: string) => ipcRenderer.invoke('get-article-html', url),
+  getLeaders: (season: number) => ipcRenderer.invoke('get-leaders', season),
+  openNotificationPrefs: () => ipcRenderer.invoke('open-notification-prefs'),
+  previewNotification: (event: string) => ipcRenderer.invoke('preview-notification', event),
+  getTeams: (sport: string, league: string) => ipcRenderer.invoke('get-teams', sport, league),
+  setActiveLeague: (leagueId: string) => ipcRenderer.invoke('set-active-league', leagueId),
+  setEnabledLeagues: (ids: string[]) => ipcRenderer.invoke('set-enabled-leagues', ids),
+  setTeamSubscriptions: (subs: Record<string, string[]>) => ipcRenderer.invoke('set-team-subscriptions', subs),
+  onEventSound: (cb: (soundId: string) => void) => {
+    const handler = (_: unknown, soundId: string) => cb(soundId)
+    ipcRenderer.on('play-event-sound', handler)
+    return () => ipcRenderer.off('play-event-sound', handler)
+  },
 }
 
 if (process.contextIsolated) {

@@ -5,12 +5,17 @@ import ChannelBadge from './ChannelBadge'
 interface Props {
   match: Match
   isUnsubscribed: boolean
-  onUnsubscribe: () => void
-  onResubscribe: () => void
+  onToggle: () => void
   onClick?: () => void
   onTeamClick?: (teamId: string, teamName: string, flagEmoji: string) => void
   onPlayerClick?: (playerId: string, playerName: string, position: string, teamFlag: string, teamAbbr: string) => void
   dimmed?: boolean
+  favoriteTeams?: string[]
+}
+
+function fmtML(ml: number): string {
+  if (!ml) return '—'
+  return ml > 0 ? `+${ml}` : `${ml}`
 }
 
 function formatMatchTime(dateStr: string) {
@@ -51,19 +56,24 @@ function GoalList({ match, side, teamFlag, teamAbbr, onPlayerClick }: {
   )
 }
 
-export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResubscribe, onClick, onTeamClick, onPlayerClick, dimmed }: Props) {
+export default function MatchCard({ match, isUnsubscribed, onToggle, onClick, onTeamClick, onPlayerClick, dimmed, favoriteTeams }: Props) {
   const isLive = match.status === 'in'
   const isFinished = match.status === 'post'
+  const isHomeFav = !!favoriteTeams?.length && favoriteTeams.includes(match.homeTeam.abbreviation)
+  const isAwayFav = !!favoriteTeams?.length && favoriteTeams.includes(match.awayTeam.abbreviation)
+  const isFavorite = isHomeFav || isAwayFav
   const homeWins = isFinished && match.homeScore > match.awayScore
   const awayWins = isFinished && match.awayScore > match.homeScore
   const homePhoto = match.homeTeam.starPlayerPhoto || match.homeTeam.teamLogo
   const awayPhoto = match.awayTeam.starPlayerPhoto || match.awayTeam.teamLogo
 
-  const cardBorder = isLive
-    ? '1px solid rgba(34, 197, 94, 0.3)'
-    : isFinished
-      ? '1px solid rgba(255,255,255,0.07)'
-      : '1px solid rgba(255,255,255,0.09)'
+  const cardBorder = isFavorite
+    ? '1px solid rgba(251,191,36,0.45)'
+    : isLive
+      ? '1px solid rgba(34, 197, 94, 0.3)'
+      : isFinished
+        ? '1px solid rgba(255,255,255,0.07)'
+        : '1px solid rgba(255,255,255,0.09)'
 
   const cardBg = isLive
     ? 'linear-gradient(135deg, rgba(5,30,10,0.95) 0%, rgba(3,20,8,0.98) 100%)'
@@ -77,9 +87,11 @@ export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResu
         borderRadius: '18px',
         overflow: 'hidden',
         border: cardBorder,
-        boxShadow: isLive
-          ? '0 4px 24px rgba(34,197,94,0.12), 0 1px 4px rgba(0,0,0,0.5)'
-          : '0 2px 12px rgba(0,0,0,0.4)',
+        boxShadow: isFavorite
+          ? '0 0 0 1px rgba(251,191,36,0.15), 0 4px 20px rgba(251,191,36,0.1), 0 2px 8px rgba(0,0,0,0.4)'
+          : isLive
+            ? '0 4px 24px rgba(34,197,94,0.12), 0 1px 4px rgba(0,0,0,0.5)'
+            : '0 2px 12px rgba(0,0,0,0.4)',
         cursor: onClick ? 'pointer' : 'default',
         opacity: dimmed ? 0.55 : 1,
         transition: 'opacity 0.15s',
@@ -118,6 +130,7 @@ export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResu
       <div style={{ position: 'relative', zIndex: 1, padding: '16px 18px 14px' }}>
         {/* Venue + status */}
         <div style={{ textAlign: 'center', marginBottom: '12px' }}>
+
           {(match.venue || match.city) && (
             <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '6px', lineHeight: 1.5 }}>
               {match.city && <span style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{match.city}</span>}
@@ -146,12 +159,14 @@ export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResu
               onClick={(e) => { e.stopPropagation(); onTeamClick?.(match.homeTeam.id, match.homeTeam.name, match.homeTeam.flagEmoji) }}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', padding: 0, cursor: onTeamClick && match.homeTeam.id ? 'pointer' : 'default', textAlign: 'left', fontFamily: 'inherit' }}
             >
-              <span style={{ fontSize: '28px', lineHeight: 1 }}>{match.homeTeam.flagEmoji}</span>
+              {match.homeTeam.flagEmoji === '🏳️' && match.homeTeam.teamLogo
+                ? <img src={match.homeTeam.teamLogo} style={{ width: '32px', height: '32px', objectFit: 'contain', flexShrink: 0 }} />
+                : <span style={{ fontSize: '28px', lineHeight: 1 }}>{match.homeTeam.flagEmoji}</span>}
               <div>
-                <p style={{ fontSize: '15px', fontWeight: 800, color: '#fff', lineHeight: 1, letterSpacing: '-0.01em', margin: 0 }}>
+                <p style={{ fontSize: '15px', fontWeight: 800, color: isHomeFav ? 'rgba(251,191,36,0.95)' : '#fff', lineHeight: 1, letterSpacing: '-0.01em', margin: 0 }}>
                   {match.homeTeam.abbreviation}
                 </p>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginTop: '2px', margin: '2px 0 0' }}>
+                <p style={{ fontSize: '10px', color: isHomeFav ? 'rgba(251,191,36,0.55)' : 'rgba(255,255,255,0.6)', marginTop: '2px', margin: '2px 0 0' }}>
                   {match.homeTeam.name}
                 </p>
               </div>
@@ -200,12 +215,14 @@ export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResu
               onClick={(e) => { e.stopPropagation(); onTeamClick?.(match.awayTeam.id, match.awayTeam.name, match.awayTeam.flagEmoji) }}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', flexDirection: 'row-reverse', background: 'none', border: 'none', padding: 0, cursor: onTeamClick && match.awayTeam.id ? 'pointer' : 'default', fontFamily: 'inherit' }}
             >
-              <span style={{ fontSize: '28px', lineHeight: 1 }}>{match.awayTeam.flagEmoji}</span>
+              {match.awayTeam.flagEmoji === '🏳️' && match.awayTeam.teamLogo
+                ? <img src={match.awayTeam.teamLogo} style={{ width: '32px', height: '32px', objectFit: 'contain', flexShrink: 0 }} />
+                : <span style={{ fontSize: '28px', lineHeight: 1 }}>{match.awayTeam.flagEmoji}</span>}
               <div style={{ textAlign: 'right' }}>
-                <p style={{ fontSize: '15px', fontWeight: 800, color: '#fff', lineHeight: 1, letterSpacing: '-0.01em', margin: 0 }}>
+                <p style={{ fontSize: '15px', fontWeight: 800, color: isAwayFav ? 'rgba(251,191,36,0.95)' : '#fff', lineHeight: 1, letterSpacing: '-0.01em', margin: 0 }}>
                   {match.awayTeam.abbreviation}
                 </p>
-                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginTop: '2px', margin: '2px 0 0' }}>
+                <p style={{ fontSize: '10px', color: isAwayFav ? 'rgba(251,191,36,0.55)' : 'rgba(255,255,255,0.6)', marginTop: '2px', margin: '2px 0 0' }}>
                   {match.awayTeam.name}
                 </p>
               </div>
@@ -218,10 +235,30 @@ export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResu
         <div style={{ marginTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <ChannelBadge broadcasts={match.broadcasts} />
 
-          {match.status === 'pre' && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          {(match.status === 'pre' || match.status === 'in') && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              {match.status === 'pre' && match.odds ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10px', flexWrap: 'wrap', minWidth: 0 }}>
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '9px', letterSpacing: '0.05em', textTransform: 'uppercase', flexShrink: 0 }}>DK</span>
+                  <span style={{ color: match.odds.homeIsFavorite ? 'rgba(74,222,128,0.85)' : 'rgba(255,255,255,0.65)', flexShrink: 0 }}>
+                    {match.homeTeam.abbreviation} <strong>{fmtML(match.odds.homeMoneyLine)}</strong>
+                  </span>
+                  <span style={{ color: 'rgba(255,255,255,0.25)' }}>·</span>
+                  <span style={{ color: 'rgba(255,255,255,0.65)', flexShrink: 0 }}>Draw <strong>{fmtML(match.odds.drawMoneyLine)}</strong></span>
+                  <span style={{ color: 'rgba(255,255,255,0.25)' }}>·</span>
+                  <span style={{ color: !match.odds.homeIsFavorite ? 'rgba(74,222,128,0.85)' : 'rgba(255,255,255,0.65)', flexShrink: 0 }}>
+                    {match.awayTeam.abbreviation} <strong>{fmtML(match.odds.awayMoneyLine)}</strong>
+                  </span>
+                  {match.odds.overUnder > 0 && (
+                    <>
+                      <span style={{ color: 'rgba(255,255,255,0.25)' }}>·</span>
+                      <span style={{ color: 'rgba(255,255,255,0.65)', flexShrink: 0 }}>O/U <strong>{match.odds.overUnder}</strong></span>
+                    </>
+                  )}
+                </div>
+              ) : <div />}
               <button
-                onClick={isUnsubscribed ? onResubscribe : onUnsubscribe}
+                onClick={(e) => { e.stopPropagation(); onToggle() }}
                 style={{
                   fontSize: '11px',
                   padding: '5px 12px',
@@ -235,9 +272,10 @@ export default function MatchCard({ match, isUnsubscribed, onUnsubscribe, onResu
                   cursor: 'pointer',
                   fontFamily: 'inherit',
                   letterSpacing: '0.02em',
+                  flexShrink: 0,
                 }}
               >
-                {isUnsubscribed ? '🔔 Unmute' : '🔕 Mute alerts'}
+                {isUnsubscribed ? '🔔 Subscribe' : '🔕 Mute alerts'}
               </button>
             </div>
           )}

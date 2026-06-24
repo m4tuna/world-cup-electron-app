@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "WC Notifier",
+    "slug": "worldcup-notifier-companion",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": [
+      "ios"
+    ],
+    "plugins": [
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7b83f45c-ee91-40cd-a087-533ad345ae6a"
+      }
+    },
+    "owner": "m42na"
+  }
+}

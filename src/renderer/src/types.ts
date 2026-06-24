@@ -17,6 +17,14 @@ export interface Team {
   starPlayerPhoto?: string
 }
 
+export interface MatchOddsInline {
+  homeMoneyLine: number
+  awayMoneyLine: number
+  drawMoneyLine: number
+  overUnder: number
+  homeIsFavorite: boolean
+}
+
 export interface Match {
   id: string
   status: 'pre' | 'in' | 'post'
@@ -31,6 +39,7 @@ export interface Match {
   venue: string
   city: string
   goalScorers: GoalScorer[]
+  odds?: MatchOddsInline
 }
 
 export interface CastDeviceStatus {
@@ -95,10 +104,27 @@ export interface BracketRound {
   matchups: BracketMatchup[]
 }
 
+export interface EventNotif {
+  enabled: boolean
+  native: boolean
+  sound: boolean
+  soundId: string
+}
+
 export interface Settings {
   notificationMinutes: number
   soundEnabled: boolean
   unsubscribedMatches: string[]
+  subscribedMatches: string[]
   watchProviderUrl: string
   watchMethod: 'browser' | 'airplay'
+  notifyGoal: EventNotif
+  notifyHalfTime: EventNotif
+  notifyFullTime: EventNotif
+  favoriteTeams: string[]
+  phoneNotifyEnabled: boolean
+  expoPushToken: string
+  activeLeagueId: string
+  enabledLeagueIds: string[]
+  teamSubscriptions: Record<string, string[]>
 }
